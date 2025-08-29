@@ -35,6 +35,8 @@ Discuss what you need to develop this project. This includes background informat
 
 ## Collaborators
 
+Kieran Plenn
+
 <div align="center">
 
 [//]: # (Replace with your collaborators)
