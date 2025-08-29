@@ -38,6 +38,6 @@ Discuss what you need to develop this project. This includes background informat
 <div align="center">
 
 [//]: # (Replace with your collaborators)
-[Giovanni Muniz] • [Andrew Blass] • [Eric Smith] • [Kieran Plenn] • [Mohammed Eisa]
+[Giovanni Muniz] • [Andrew Blass] • [Eric Smith] • [Kieran Plenn] • [Mohammad Eisa]
 
 </div>
