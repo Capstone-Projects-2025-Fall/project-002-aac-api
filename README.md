@@ -11,15 +11,15 @@
 
 ## Keywords
 
-Section #, as well as any words that quickly give your peers insights into the application like programming language, development platform, type of application, etc.
+Section 2, API, programming language as of yet undefined
 
 ## Project Abstract
 
-This document proposes a novel application of a text message (SMS or Email) read-out and hands-free call interacted between an Android Smartphone and an infotainment platform (headunit) in a car environment. When a phone receives an SMS or Email, the text message is transferred from the phone to the headunit through a Bluetooth connection. On the headunit, user can control which and when the received SMS or E-mail to be read out through the in-vehicle audio system. The user may press one button on the headunit to activate the hands-free feature to call back the SMS sender.
+This document proposes a coding API to better allow accessibility in video games. It will allow developers to more easily connect their games to audio-to-text programs, allowing them to manipulate the in-game controls through the use of an AAC machine. On playback the API will run an audio-to-text program on it and check for if the produced text has been set as any possible inputs in the connected game and execute them if found to be true.
 
 ## High Level Requirement
 
-Describe the requirements – i.e., what the product does and how it does it from a user point of view – at a high level.
+This api will be control the in between communications between games and the users AAC machine, allowing for control of the game purely with audio playback.
 
 ## Conceptual Design
 
