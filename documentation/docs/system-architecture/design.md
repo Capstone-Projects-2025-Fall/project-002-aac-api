@@ -25,3 +25,38 @@ Entity-relation diagram.
 Table design.
 
 A check list for architecture design is attached here [architecture\_design\_checklist.pdf](https://templeu.instructure.com/courses/106563/files/16928870/download?wrap=1 "architecture_design_checklist.pdf")  and should be used as a guidance.
+
+```mermaid
+sequenceDiagram
+  participant Game as Game;
+  participant Library as Library;
+  Actor User as User;
+  participant API as API;
+  participant OS Audio as OS Audio;
+  participant UI as UI;
+
+  activate Game;
+  Game ->> Library: requestInput(data);
+  Library ->> User: requestAudio(audio input);
+  activate Library;
+  User -->> Library: Returns audio input;
+  Library ->> API: translateThis(audio input);
+  
+  activate API;
+  API ->> OS Audio: translateThis(audio input);
+  activate OS Audio;
+  OS Audio -->> API: data(translatedString);
+  deactivate OS Audio;
+  API -->> Library: data(translatedString);
+  deactivate API;
+  Library ->> Game: requestedInput(input);
+  deactivate Library;
+  Game ->> UI: data(visualConfirmation);
+  deactivate Game;
+```
+
+
+
+
+
+
