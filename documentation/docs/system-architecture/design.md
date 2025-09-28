@@ -26,6 +26,11 @@ Table design.
 
 A check list for architecture design is attached here [architecture\_design\_checklist.pdf](https://templeu.instructure.com/courses/106563/files/16928870/download?wrap=1 "architecture_design_checklist.pdf")  and should be used as a guidance.
 
+I've left the text above as a guide until this document is more finalized.
+
+This diagram shows an AAC user providing an input to the game. First, the game calls a function from our library, expecting an input in return. Then, the library accesses the system microphone, which is shown as an interaction with the user. Once the audio is returned, it is piped to the API, which tenatively is a seperate process than the game's implementation of the library. The API then calls the operating system's native transcription functions, and gets a string in return. The library then passes the input to the game, which displays the resulting action to the user.
+
+
 ```mermaid
 sequenceDiagram
   participant Game as Game;
