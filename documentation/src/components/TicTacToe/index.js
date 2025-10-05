@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const TicTacToe = () => {
   const [board, setBoard] = useState(['', '', '', '', '', '', '', '', '']);
@@ -6,6 +6,28 @@ const TicTacToe = () => {
   const [winner, setWinner] = useState('');
   const [listening, setListening] = useState(false);
   const [recognition, setRecognition] = useState(null);
+  const playerRef = useRef('X');
+  const boardRef = useRef(['', '', '', '', '', '', '', '', '']);
+  
+  // Text-to-speech function
+  const speak = (text) => {
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.8;
+      utterance.pitch = 1;
+      speechSynthesis.speak(utterance);
+    }
+  };
+
+  // Get position name for audio announcement
+  const getPositionName = (index) => {
+    const positionNames = [
+      'top left', 'top center', 'top right',
+      'middle left', 'center', 'middle right', 
+      'bottom left', 'bottom center', 'bottom right'
+    ];
+    return positionNames[index];
+  };
 
   useEffect(() => {
     if ('webkitSpeechRecognition' in window) {
@@ -51,8 +73,8 @@ const TicTacToe = () => {
     }
     
     if (position !== undefined) {
-      console.log('Moving to position:', position, 'Current player:', player); // Debug log
-      handleClick(position, player);
+      console.log('Moving to position:', position, 'Current player:', playerRef.current); // Debug log
+      handleClick(position);
       return;
     }
     
@@ -80,6 +102,7 @@ const TicTacToe = () => {
     if (recognition) {
       recognition.start();
       setListening(true);
+      speak("Listening for voice commands");
     }
   };
 
@@ -87,10 +110,11 @@ const TicTacToe = () => {
     if (recognition) {
       recognition.stop();
       setListening(false);
+      speak("Stopped listening");
     }
   };
 
-  const checkWinner = () => {
+  const checkWinner = (currentBoard = boardRef.current) => {
     const lines = [
       [0, 1, 2], [3, 4, 5], [6, 7, 8],
       [0, 3, 6], [1, 4, 7], [2, 5, 8],
@@ -99,37 +123,63 @@ const TicTacToe = () => {
 
     for (let i = 0; i < lines.length; i++) {
       const [a, b, c] = lines[i];
-      if (board[a] && board[a] === board[b] && board[a] === board[c]) {
-        return board[a];
+      if (currentBoard[a] && currentBoard[a] === currentBoard[b] && currentBoard[a] === currentBoard[c]) {
+        return currentBoard[a];
       }
     }
     return null;
   };
 
-  const handleClick = (index, currentPlayer = player) => {
-    if (board[index] || winner) return;
+  const handleClick = (index) => {
+    const currentBoard = boardRef.current;
+    if (currentBoard[index] || winner) return;
 
+    const currentPlayer = playerRef.current;
     console.log('Current player:', currentPlayer, 'Placing at index:', index); // Debug log
+    console.log('Board before move:', currentBoard); // Debug log
     
-    const newBoard = [...board];
+    const newBoard = [...currentBoard];
     newBoard[index] = currentPlayer;
     setBoard(newBoard);
+    boardRef.current = newBoard;
 
-    const gameWinner = checkWinner();
+    // Announce the move
+    const positionName = getPositionName(index);
+    speak(`${currentPlayer} has been placed in ${positionName}`);
+    
+    const gameWinner = checkWinner(newBoard);
     if (gameWinner) {
+      console.log('Winner found:', gameWinner); // Debug log
       setWinner(gameWinner);
+      setTimeout(() => {
+        speak(`Player ${gameWinner} wins!`);
+      }, 1000);
+    } else if (newBoard.every(cell => cell !== '')) {
+      console.log('Draw - board is full'); // Debug log
+      setWinner('draw');
+      setTimeout(() => {
+        speak("It's a draw!");
+      }, 1000);
     } else {
       const nextPlayer = currentPlayer === 'X' ? 'O' : 'X';
       console.log('Switching from', currentPlayer, 'to', nextPlayer); // Debug log
       setPlayer(nextPlayer);
+      playerRef.current = nextPlayer;
       console.log('Player state updated to:', nextPlayer); // Debug log
+      setTimeout(() => {
+        speak(`It's ${nextPlayer}'s turn`);
+      }, 1500);
     }
   };
 
   const reset = () => {
-    setBoard(['', '', '', '', '', '', '', '', '']);
+    const emptyBoard = ['', '', '', '', '', '', '', '', ''];
+    setBoard(emptyBoard);
+    boardRef.current = emptyBoard;
     setPlayer('X');
+    playerRef.current = 'X';
     setWinner('');
+    speak("New game started. It's X's turn");
   };
 
   console.log('Rendering with player:', player); // Debug log
@@ -139,7 +189,8 @@ const TicTacToe = () => {
       <h1>Tic Tac Toe with Voice Control</h1>
       
       {!winner && <h2>Current Player: {player}</h2>}
-      {winner && <h2>Player {winner} wins!</h2>}
+      {winner && winner !== 'draw' && <h2>Player {winner} wins!</h2>}
+      {winner === 'draw' && <h2>It's a draw!</h2>}
       
       <div style={{ marginBottom: '20px' }}>
         <button 
