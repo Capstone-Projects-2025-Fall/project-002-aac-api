@@ -4,6 +4,9 @@
  * Description: This is a basic initialization of an API. Instructions were followed from this
  *              video: https://www.youtube.com/watch?v=-MTSQjw5DrM
  * Note: Key 'bug' fix was to make sure the app.listen() function was not deleted. 
+ * 
+ * Run: Make sure you're in the Initial_API directory. Enter 'node .' into the terminal to start
+ *      the API. Check http://localhost:8080 for success.
  */
 
 const express = require('express');
