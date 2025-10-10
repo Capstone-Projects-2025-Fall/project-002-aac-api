@@ -2,45 +2,133 @@
 sidebar_position: 5
 ---
 
-# Use-case descriptions
-### Use Case 1 - AAC Accessible Game Development
-<i>As a game developer, I want to be able to use the API to easily convert sound from an AAC board to game inputs for a character to move</i>
-1. The developer imports the API and all of its functions.
-2. The developer creates a bucket list of words, such as "move left", "move right", and "move up," for their game.
-3. The developer uses the bucket list as arguments for any of the given functions from the API.
-4. The functions then hear audio from the AAC board and use algorithms to sort the words from the bucket list into a desired movement output.
-5. The functions return a word.
-6. The developer then maps the words to game inputs, which are used for a character within their game to be able to move.
+# Use-case Descriptions
 
-### Use Case 2 - AAC Board User Gameplay
-<i>As an AAC Board user, I want to be able to play games with other people with my voice</i>
-1. The user connects their board to the game.
-2. The user then joins a multiplayer game with other users who are on different input devices.
-3. The user uses their voice to be able to control any input within the game.
-4. The user is able to play alongside other users simultaneously.
+This document outlines the main interactions for the AAC Integration API. Each use case describes how different actors (developers, users, educators) interact with the system to achieve specific goals.
 
-### Use Case 3 – Educational Application
-<i>As an educator, I want to ensure fun ways to teach and engage students who depend on AAC devices</i>
-1. The teacher selects a game that supports the AAC API.
-2. The student issues voice commands through the AAC board during gameplay.
-3. The game responds to the commands, rewarding progress or advancing the activity.
-4. The teacher observes the student’s performance and provides encouragement or feedback.
-5. The student is able to practice speech while staying engaged with the game.
+---
 
-### Use Case 4 – AAC Board Customizability Access
-<i>As a game developer, I want to customize the set of AAC voice commands supported by the API so that I can adapt them to different genres of games</i>
-1. The developer imports the API into their project.
-2. The developer defines a new command set tailored for their game, such as “accelerate,” “brake,” and “boost” for a racing game.
-3. The API listens for AAC inputs and interprets them according to the customized command set.
-4. The developer associates each command with the appropriate in-game function.
-5. As the game is running, the commands are translated into the corresponding in-game actions.
-6. The developer can expand or edit the command set in future updates to refine gameplay.
+## Use Case 1 – AAC Accessible Game Development
+**Actor:** Game Developer  
+**Goal:** Allow developers to integrate AAC board input into their games without hardcoding commands.
 
-### Use Case 5 – Non-Compatible Game Refactoring
-<i>As a game developer, I want to refactor my existing game to use the API so that players with AAC boards can control the game without traditional input devices.</i>
-1. The developer imports the API into their existing codebase.
-2. The developer identifies sections of the code that currently take keyboard or controller input.
-3. The developer replaces those input calls with functions from the API that capture AAC voice commands.
-4. The developer tests the game to confirm that AAC inputs are correctly mapped to game mechanics.
-5. The developer deploys the updated version of the game.
-6. Players are now able to use AAC voice input seamlessly in a game that originally only supported standard controls.
+1. Developer imports the API into their game project.
+2. Developer defines a set of voice commands relevant to the game (e.g., "move left", "jump").
+3. API listens for AAC inputs from a connected board.
+4. API translates recognized inputs into game actions.
+5. Developer maps API output to in-game mechanics.
+6. Developer tests gameplay to confirm inputs are correctly interpreted.
+
+---
+
+## Use Case 2 – AAC Board User Gameplay
+**Actor:** AAC Board User  
+**Goal:** Enable users to play games using their AAC device as input.
+
+1. User connects their AAC board to the game.
+2. User joins a multiplayer session with other users.
+3. User issues voice commands or selects symbols during gameplay.
+4. API interprets inputs and sends corresponding game actions.
+5. Game provides immediate feedback to the user.
+6. Multiple users can interact concurrently without conflicts.
+
+---
+
+## Use Case 3 – Educational Application
+**Actor:** Educator / Teacher  
+**Goal:** Support fun and engaging ways for students using AAC devices to practice speech and participate in learning games.
+
+1. Teacher selects a game that supports the AAC API.
+2. Student issues voice commands via their AAC board during gameplay.
+3. Game responds to commands by rewarding progress or advancing activities.
+4. Teacher observes student performance and provides feedback.
+5. Students remain engaged while practicing speech.
+
+---
+
+## Use Case 4 – AAC Board Customizability Access
+**Actor:** Game Developer  
+**Goal:** Allow developers to define custom voice commands tailored to different game genres.
+
+1. Developer imports the API into their project.
+2. Developer defines a new command set (e.g., “accelerate,” “brake,” “boost” for a racing game).
+3. API listens for AAC inputs and translates them according to the custom set.
+4. Developer maps commands to appropriate in-game actions.
+5. Developer can expand or modify the command set in future updates.
+
+---
+
+## Use Case 5 – Non-Compatible Game Refactoring
+**Actor:** Game Developer  
+**Goal:** Enable developers to retrofit existing games to support AAC board input.
+
+1. Developer imports the API into the existing game codebase.
+2. Developer identifies sections currently using keyboard or controller inputs.
+3. Developer replaces those inputs with API functions that capture AAC voice commands.
+4. Developer tests the game to confirm AAC input works correctly.
+5. Updated game version deployed, allowing players to use AAC voice input.
+
+---
+
+## Use Case 6 – Multi-User / Concurrent Gameplay
+**Actor:** AAC Board Users  
+**Goal:** Support multiple users interacting with the same game session simultaneously.
+
+1. Multiple users join a game session with AAC boards connected.
+2. API handles inputs from all users in real-time.
+3. Game updates actions and displays results to all players.
+4. API ensures no input conflicts and provides feedback to each user.
+
+---
+
+## Use Case 7 – Error Handling and Feedback
+**Actor:** AAC Board User / Game Developer  
+**Goal:** Ensure the system handles unrecognized input and provides clear feedback.
+
+1. User provides an input that the API cannot recognize.
+2. API returns feedback to the game.
+3. Game displays the feedback or prompts the user to retry.
+4. Developer can configure fallback actions for unrecognized commands.
+
+---
+
+## Use Case 8 – Integration with New AAC Devices
+**Actor:** Game Developer  
+**Goal:** Allow the API to support AAC devices not originally tested.
+
+1. Developer connects a new AAC device to the system.
+2. API detects device input format and maps it to existing command structure.
+3. Developer verifies correct integration.
+4. Users can control the game with the new device seamlessly.
+
+---
+
+## Use Case 9 – Real-Time Feedback to Users
+**Actor:** AAC Board User  
+**Goal:** Provide immediate confirmation of recognized inputs to improve user experience.
+
+1. User issues a voice command through the AAC board.
+2. API interprets the input and sends a response to the game.
+3. Game displays or plays feedback confirming the recognized action.
+
+---
+
+## Use Case 10 – Developer Testing and Debugging
+**Actor:** Game Developer  
+**Goal:** Allow developers to test and debug AAC integration during development.
+
+1. Developer runs the game in test mode with the API enabled.
+2. Developer issues various AAC commands to simulate user input.
+3. API logs recognized commands and results.
+4. Developer uses logs to adjust mappings or command sets as needed.
+
+---
+
+## Use Case 11 – Security and Privacy Compliance
+**Actor:** Game Developer / System Admin  
+**Goal:** Ensure user data and interactions are secure.
+
+1. API handles user inputs without storing sensitive data unnecessarily.
+2. API validates requests to prevent unauthorized access.
+3. Game and API communicate securely over encrypted channels.
+4. Developers and admins can monitor API access and usage logs as needed.

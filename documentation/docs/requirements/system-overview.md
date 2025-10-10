@@ -5,11 +5,14 @@ sidebar_position: 1
 # System Overview
 
 ## Project Abstract
-This API allows developers to more easily connect their games to audio-to-text programs, allowing them to control the game with an AAC input. On playback the API will run an audio-to-text program and check if the produced text matches possible inputs in the connected game and execute them.
+This API enables developers to connect their games to AAC devices using audio input. It converts speech from the AAC device into text, matches it against predefined commands, and executes corresponding in-game actions.  
+
 ## Conceptual Design
-The API will process audio outputs from AAC devices, translate them into game commands, and communicate those commands with games that are built in JavaScript. The API will use Node.js and Python for audio processing and machine learning. The API is modular, as developers can design audio-controlled games wihout handling AAC board input and enable in-game actions. 
+The API processes audio from AAC devices, translates it into game commands, and communicates with games built in JavaScript. Node.js handles the server-side integration, while Python is used for audio processing and machine learning components. The API is modular, allowing developers to implement audio-controlled gameplay without handling low-level AAC board input.
+
+---
 
 ## Background
-The AAC API will be implemented by game developers looking to support voice input, specifically from the devices of AAC users. The API will access the system microphone, perform speech-to-text, and then return input to the game logic. Developers can define the words that the API will recognize.
+Game developers aiming to support AAC voice input can use this API to access the system microphone, perform speech-to-text conversion, and feed recognized inputs into game logic. Developers define the set of words or phrases the API recognizes, enabling customized gameplay experiences.  
 
-Currently, there are a few AAC tools and assitive systems that support communication and accesibility with AAC devices, such as Microsoft's Xbox Adapative Controller, which is a controller desgined to offer creative input methods for those who are disabled and other software that uses eye-tracking as inputs with users with congnitive or physical disabilityes, but none use the AAC devices to act as game controllers, and more specifially with audio inputs. 
+Existing AAC tools and assistive systems, such as Microsoft's Xbox Adaptive Controller or eye-tracking software for users with cognitive or physical disabilities, provide alternative input methods. However, none allow AAC devices to act as full game controllers using **audio input**. This API fills that gap, enabling seamless AAC-controlled gameplay.

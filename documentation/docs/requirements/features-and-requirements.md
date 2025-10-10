@@ -4,24 +4,32 @@ sidebar_position: 4
 
 # Features and Requirements
 
+This document outlines the core functionality and performance expectations for the AAC Integration API. The system aims to simplify how external applications, such as games or training modules, interact with real AAC boards and speech-based communication tools.
+
+---
+
 ## Functional Requirements
-<ul>
-  <li>API must take in preset audio input options it is expecting</li>
-  <li>API must connect to, activate, and record audio from microphone</li>
-  <li>API must connect to speech-to-text database (either internal or external)</li>
-  <li>API must translate recorded audio into text</li>
-  <li>API must compare translated audio input to input options and record if it is included in the list, and which one if it is</li>
-  <li>API must return comparison results</li>
-  <li>API must be compatible with any suitable AAC device</li>
-</ul>
+
+- The system should **enable games and external applications to connect to AAC devices** through a unified API interface.  
+- The API should **translate user speech or selections into AAC-compatible actions or symbols**.  
+- The system should **support real-time communication** between a user’s AAC board and the connected application.  
+- The API should **allow developers to define or import AAC layouts** (such as boards or symbol sets) used by their game or app.  
+- The system should **return structured feedback** confirming recognized input and selected AAC elements.  
+- The API should be **compatible with existing AAC tools**, such as CoughDrop, and designed to accommodate future integrations.
+
+---
 
 ## Non-Functional Requirements
-<ul>
-  <li>API should respond quickly to inputs so users don’t feel lag</li>
-  <li>API should be flexible enough to support new AAC devices in the future</li>
-  <li>API should be able to handle multiple developer requests at once</li>
-  <li>API should be able to process concurrent audio inputs</li>
-  <li>API should give feedback so users know their action was received</li>
-  <li>API should have flexibility for future use-cases</li>
-  <li>API should keep data secure</li>
-</ul>
+
+- The API should **respond quickly** to maintain a natural and engaging user experience.  
+- It should be **reliable and stable** during real-time audio or symbol exchange.  
+- The system should be **secure**, protecting user and device data from unauthorized access.  
+- The API should be **scalable**, supporting multiple concurrent requests from different applications.  
+- It should be **flexible and extensible**, allowing future updates to handle new AAC devices, symbol systems, or input types.  
+- The system should provide **clear feedback and error handling** to assist both developers and users in understanding API responses.
+
+---
+
+## Summary
+
+The AAC Integration API focuses on bridging the gap between AAC communication tools and interactive applications. By standardizing the way speech, symbols, and AAC boards connect to external systems, the project will help developers build more inclusive experiences without needing to hardcode accessibility features.
