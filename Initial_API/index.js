@@ -13,18 +13,25 @@
  */
 
 const express = require('express');
+const multer = require('multer');
 const app = express();
 const PORT = 8080;
+
+const upload = multer({ dest: 'uploads/' });
 
 // Middleware to parse JSON
 app.use(express.json());
 
 // GET
-app.get('/test', (req, res) => {
-    res.status(200).send({
-        name: 'Test1',
-        status: 'test'
-    });
+app.get('/test', upload.single("audioFile"), (req, res) => {
+    if(!req.file){
+        res.status(400).send('No audio file uploaded.');
+    }else{
+        res.status(200).send({
+            name: 'Test1',
+            status: 'test'
+        });
+    }
 });
 
 // POST

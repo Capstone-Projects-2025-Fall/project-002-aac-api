@@ -3,6 +3,7 @@ const app = require('../index'); // Import your Express app
 
 describe('Basic API Tests', () => {
 
+  //this one should return false
   it('GET /test should return 200 and correct JSON', async () => {
     const res = await request(app).get('/test');
     expect(res.statusCode).toBe(200);
