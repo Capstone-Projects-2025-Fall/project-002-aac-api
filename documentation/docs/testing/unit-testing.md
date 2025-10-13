@@ -41,6 +41,54 @@ We are using **Jest** along with **Supertest** for unit testing.
 
 ---
 
+## Setup
+
+1. Install dependencies (if not already installed):
+```bash
+npm install
+```
+
+2. Ensure your `package.json` contains:
+```json
+"scripts": {
+  "test": "jest"
+}
+```
+
+## Running Tests
+
+- Run all tests:
+```bash
+npm test
+```
+
+- Run with coverage:
+```bash
+npm test -- --coverage
+```
+
+- Run a specific test file:
+```bash
+npm test -- __tests__/api.test.js
+```
+
+## Test Structure
+```javascript
+describe('Component/Method Name', () => {
+  beforeEach(() => {
+    // Setup code
+  });
+
+  it('should do something specific', async () => {
+    // Arrange
+    // Act
+    // Assert
+  });
+});
+```
+
+---
+
 ## Test Cases
 
 Unit tests are located in `tests/basicApi.test.js`. Below is a summary of the test cases.
@@ -58,7 +106,7 @@ Unit tests are located in `tests/basicApi.test.js`. Below is a summary of the te
 ## Test Coverage Report
 
 The HTML coverage report is available in the Docusaurus documentation site at:  
-[View Coverage Report](/coverage/index.html)
+[View Coverage Report](/documentation/static/coverage/index.html)
 
 > **Note:** The report can be updated by regenerating it via `npx jest --coverage` and copying the files to the Docusaurus `static/coverage` folder.
 
