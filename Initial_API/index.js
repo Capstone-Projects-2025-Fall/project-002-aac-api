@@ -8,16 +8,30 @@
  * 
  * Run: Make sure you're in the Initial_API directory. Enter 'node .' into the terminal to start
  *      the API. Check http://localhost:8080 for success.
+ *      The swagger documentation is available at http://localhost:8080/api-docs
  * 
- * Last Edit (10/10/2025): Changed code to allow for unit testing with Jest
+ * Last Edit (10/13/2025): Updated the code to include swagger-autogen for automatic documentation 
+ *                     generation. Added scripts to package.json for easy regeneration of docs.
  */
 
 const express = require('express');
+const swaggerUi = require('swagger-ui-express');
+const swaggerDocument = require('./swagger_output.json');
+const swaggerSpec = require('./swagger_output.json');
 const app = express();
 const PORT = 8080;
 
 // Middleware to parse JSON
 app.use(express.json());
+
+// Swagger route setup
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+app.get('/swagger.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.send(swaggerSpec);
+});
+
+// Command to regenerate swagger docs: npm run swagger-autogen
 
 // GET
 app.get('/test', (req, res) => {
@@ -43,7 +57,10 @@ app.post('/test/:id', (req, res) => {
 
 // Only start server if this file is run directly
 if (require.main === module) {
-    app.listen(PORT, () => console.log(`it's alive on http://localhost:${PORT}`));
+    app.listen(PORT, () => {
+      console.log(`it's alive on http://localhost:${PORT}`);
+      console.log(`Swagger docs available at http://localhost:${PORT}/api-docs`);
+    });
 }
 
 // Export app for testing
