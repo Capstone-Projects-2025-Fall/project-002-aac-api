@@ -1,0 +1,21 @@
+{
+  "id": "features/speech-to-text",
+  "title": "Speech to Text Feature",
+  "description": "The Speech to Text feature provides real-time speech recognition capabilities, converting spoken words into text. This is particularly useful for accessibility and hands-free text input in the AAC (Augmentative and Alternative Communication) system.",
+  "source": "@site/docs/features/speech-to-text.md",
+  "sourceDirName": "features",
+  "slug": "/features/speech-to-text",
+  "permalink": "/aac-api/docs/features/speech-to-text",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/your-org/aac-api/edit/main/documentation/docs/features/speech-to-text.md",
+  "tags": [],
+  "version": "current",
+  "lastUpdatedBy": "Author",
+  "frontMatter": {},
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Acceptance test",
+    "permalink": "/aac-api/docs/testing/acceptence-testing"
+  }
+}

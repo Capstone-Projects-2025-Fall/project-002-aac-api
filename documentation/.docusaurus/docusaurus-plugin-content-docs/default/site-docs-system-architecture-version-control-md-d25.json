@@ -1,0 +1,28 @@
+{
+  "id": "system-architecture/version-control",
+  "title": "Version Control",
+  "description": "",
+  "source": "@site/docs/system-architecture/version-control.md",
+  "sourceDirName": "system-architecture",
+  "slug": "/system-architecture/version-control",
+  "permalink": "/undefined/docs/system-architecture/version-control",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/undefined/undefined/edit/main/documentation/docs/system-architecture/version-control.md",
+  "tags": [],
+  "version": "current",
+  "lastUpdatedBy": "github-classroom[bot]",
+  "sidebarPosition": 5,
+  "frontMatter": {
+    "sidebar_position": 5
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Development Environment",
+    "permalink": "/undefined/docs/system-architecture/development-environment"
+  },
+  "next": {
+    "title": "API Specification",
+    "permalink": "/undefined/docs/category/api-specification"
+  }
+}
