@@ -10,6 +10,11 @@
  *      the API. Check http://localhost:8080 for success.
  * 
  * Last Edit (10/10/2025): Changed code to allow for unit testing with Jest
+ * 
+ * Update by Andrew Blass:
+ * - added new post function for uploading audio file and recieving back a message
+ * - new tests added to confirm responses for when file is and isnt attached to the request
+ * - audio processing to translate speech to text still needed
  */
 
 const express = require('express');
@@ -17,21 +22,18 @@ const multer = require('multer');
 const app = express();
 const PORT = 8080;
 
-const upload = multer({ dest: 'uploads/' });
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
 
 // Middleware to parse JSON
 app.use(express.json());
 
 // GET
-app.get('/test', upload.single("audioFile"), (req, res) => {
-    if(!req.file){
-        res.status(400).send('No audio file uploaded.');
-    }else{
-        res.status(200).send({
-            name: 'Test1',
-            status: 'test'
-        });
-    }
+app.get('/test', (req, res) => {
+    res.status(200).send({
+        name: 'Test1',
+        status: 'test'
+    });
 });
 
 // POST
@@ -45,6 +47,23 @@ app.post('/test/:id', (req, res) => {
 
     res.send({
         name: `Test message with info: ${info} and ID: ${id}`,
+    });
+});
+
+app.post('/upload', upload.single("audioFile"), (req, res) =>{
+    if(!req.file){
+        return res.status(418).send({message: 'No audio file uploaded'});
+    }
+
+    //access the file buffer
+    const audioBuffer = req.file.buffer;
+
+    //insert audio processing here
+
+    //return message
+    res.status(200).send({
+        message: 'Received audio file: ${req.file.originalname}',
+        size: req.file.size + ' bytes'
     });
 });
 
