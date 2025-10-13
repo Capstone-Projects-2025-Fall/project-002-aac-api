@@ -106,7 +106,7 @@ Unit tests are located in `tests/basicApi.test.js`. Below is a summary of the te
 ## Test Coverage Report
 
 The HTML coverage report is available in the Docusaurus documentation site at:  
-[View Coverage Report](/documentation/static/coverage/index.html)
+[View Coverage Report](/coverage/index.html)
 
 > **Note:** The report can be updated by regenerating it via `npx jest --coverage` and copying the files to the Docusaurus `static/coverage` folder.
 
