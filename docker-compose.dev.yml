@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  # API Service for Development
+  api-dev:
+    build:
+      context: ./Initial_API
+      dockerfile: Dockerfile.dev
+    container_name: aac-api-dev
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+    volumes:
+      - ./Initial_API:/app
+      - /app/node_modules
+    networks:
+      - aac-dev-network
+    restart: unless-stopped
+    command: npm run dev
+
+  # Documentation Service for Development
+  docs-dev:
+    build:
+      context: ./documentation
+      dockerfile: Dockerfile.dev
+    container_name: aac-docs-dev
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./documentation:/app
+      - /app/node_modules
+    networks:
+      - aac-dev-network
+    restart: unless-stopped
+    command: yarn start --host 0.0.0.0
+
+  # Database for development (if needed)
+  postgres:
+    image: postgres:15-alpine
+    container_name: aac-postgres-dev
+    environment:
+      - POSTGRES_DB=aac_dev
+      - POSTGRES_USER=dev_user
+      - POSTGRES_PASSWORD=dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - aac-dev-network
+    restart: unless-stopped
+
+  # Redis for caching (if needed)
+  redis:
+    image: redis:7-alpine
+    container_name: aac-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - aac-dev-network
+    restart: unless-stopped
+
+networks:
+  aac-dev-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
