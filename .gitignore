@@ -3,6 +3,10 @@
 
 # Node modules
 node_modules/
+<<<<<<< HEAD
+=======
+**/node_modules/
+>>>>>>> 22a3a10f780b59721f89696de074e4371e920f4e
 
 # Misc
 .DS_Store
