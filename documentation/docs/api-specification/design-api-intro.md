@@ -185,7 +185,7 @@ app.post('/test/:id', (req, res) => {
 
 * Followed instructions from: [https://www.youtube.com/watch?v=-MTSQjw5DrM](https://www.youtube.com/watch?v=-MTSQjw5DrM)
 * Ensure `app.listen()` remains in the code; removing it will prevent the API from running.
-* Run using:
+* Navigate to the /Initial_API folder from the project's root folder. Then, run by using:
 
   ```bash
   node .
