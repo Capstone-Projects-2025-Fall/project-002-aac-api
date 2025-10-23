@@ -22,7 +22,6 @@ DURATION = 5 # 5 seconds
 audioSpeech = record_audio(DURATION) # To hold the audio file being transcribed
 
 # Attempt to transcribe the recorded audio
-
 try:
     text = recognizer.recognize_google(audioSpeech) # Using Google's speech recognition
     print(f"You said: {text}")

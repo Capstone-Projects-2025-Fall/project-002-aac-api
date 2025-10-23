@@ -11,6 +11,7 @@ CORS(app)
 
 recognizer = sr.Recognizer()
 
+# Record the audio from the microphone
 def record_audio(duration):
     "Record audio from the microphone for a given duration in seconds."
     with sr.microphone() as source:
@@ -22,6 +23,7 @@ def record_audio(duration):
         print("Recording finished!")
     return audio
 
+# Transcribe audio data to text
 def transribe_audio(audio):
     "Transcribe audio data to text using Google's speech recognition."
     try:
@@ -33,6 +35,7 @@ def transribe_audio(audio):
         return f"Error: {e}"
 
 # The REST API endpoint to handle audio transcription
+
 @app.route('/api/record', methods=['POST'])
 def record_and_transcribe():
     # Record audio from server's microphone and transcribe it
@@ -46,6 +49,7 @@ def record_and_transcribe():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# Transcribe the uploaded audio file
 @app.route('/api/transcribe', methods=['POST'])
 def transribe_uploaded_audio():
     # Transcribe audio data sent in the request
@@ -62,9 +66,14 @@ def transribe_uploaded_audio():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/', methods=['GET'])
+def health_check():
+    return jsonify({"status": "Speech recognition server is running"}), 200
+
 if __name__ == '__main__':
     print("Starting the speech recognition server...")
     print("Available endpoints:")
+    print("GET / - Health check")
     print("POST /api/record - Record audio from microphone and transcribe")
     print("POST /api/transcribe - Transcribe uploaded audio file")
     app.run(host='0.0.0.0', port =5000, debug=True)
