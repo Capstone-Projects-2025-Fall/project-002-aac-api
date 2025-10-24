@@ -61,7 +61,7 @@ app.post('/upload', upload.single("audioFile"), async (req, res) => {
     
     try {
         // Call Python script
-        const python = spawn('python3', [
+        const python = spawn(process.platform === "win32" ? "python" : "python3", [
             path.join(__dirname, 'speech2.py')
         ]);
         
