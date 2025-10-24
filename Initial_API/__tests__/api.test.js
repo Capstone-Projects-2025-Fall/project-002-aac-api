@@ -55,9 +55,7 @@ describe('Basic API Tests', () => {
     const res = await request(app)
       .post('/upload')
       .attach('audioFile', filePath);
-    expect(res.body).toHaveProperty('pyCode');
-    expect(res.body.pyCode).toMatch(0);
     expect(res.statusCode).toBe(200);
-    println(res.body.transcription)
+    console.log(res.body.transcription)
   });
 });

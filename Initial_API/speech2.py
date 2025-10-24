@@ -1,21 +1,21 @@
 import speech_recognition as sr
 import sys
+import io
 
 recognizer = sr.Recognizer()
 
 try:
-    # Read audio data from stdin (sent by Node.js)
-    audio_data = sys.stdin.buffer.read()
+    # Read full audio file from stdin (bytes)
+    audio_bytes = sys.stdin.buffer.read()
     
-    # Create AudioData object from the buffer
-    # Note: You may need to specify the sample rate and width
-    # This assumes 16kHz, 16-bit audio (adjust as needed)
-    audio = sr.AudioData(audio_data, sample_rate=16000, sample_width=2)
+    # Load audio from bytes (handles WAV, FLAC, AIFF, etc.)
+    with sr.AudioFile(io.BytesIO(audio_bytes)) as source:
+        audio = recognizer.record(source)
     
-    # Attempt to transcribe
+    # Recognize speech using Google
     text = recognizer.recognize_google(audio)
-    print(text)  # Output only the transcription
-    
+    print(text)
+
 except sr.UnknownValueError:
     print("Could not understand audio")
     sys.exit(1)
