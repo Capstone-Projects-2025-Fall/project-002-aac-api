@@ -21,7 +21,7 @@ except sr.UnknownValueError:
     sys.exit(1)
 except sr.RequestError as e:
     print(f"Error: {e}")
-    sys.exit(1)
+    sys.exit(2)
 except Exception as e:
     print(f"Error: {e}")
-    sys.exit(1)
+    sys.exit(3)
