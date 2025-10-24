@@ -85,6 +85,7 @@ app.post('/upload', upload.single("audioFile"), async (req, res) => {
         python.on('close', (code) => {
             if (code !== 0) {
                 return res.status(300).send({
+                    pyCode: code,
                     message: 'Audio processing failed',
                     error: error
                 });
