@@ -24,6 +24,8 @@ const PORT = 8080;
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
+const { spawn } = require('child_process');
+const path = require('path');
 
 // Middleware to parse JSON
 app.use(express.json());
@@ -50,21 +52,59 @@ app.post('/test/:id', (req, res) => {
     });
 });
 
-app.post('/upload', upload.single("audioFile"), (req, res) =>{
+app.post('/upload', upload.single("audioFile"), async (req, res) => {
     if(!req.file){
         return res.status(418).send({message: 'No audio file uploaded'});
     }
-
-    //access the file buffer
+    
     const audioBuffer = req.file.buffer;
-
-    //insert audio processing here
-
-    //return message
-    res.status(200).send({
-        message: 'Received audio file: ${req.file.originalname}',
-        size: req.file.size + ' bytes'
-    });
+    
+    try {
+        // Call Python script
+        const python = spawn(process.platform === "win32" ? "python" : "python3", [
+            path.join(__dirname, 'speech2.py')
+        ]);
+        
+        // Send audio data to Python script via stdin
+        python.stdin.write(audioBuffer);
+        python.stdin.end();
+        
+        let result = '';
+        let error = '';
+        
+        // Collect output
+        python.stdout.on('data', (data) => {
+            result += data.toString();
+        });
+        
+        python.stderr.on('data', (data) => {
+            error += data.toString();
+        });
+        
+        // Wait for completion
+        python.on('close', (code) => {
+            if (code !== 0) {
+                return res.status(300).send({
+                    pyCode: code,
+                    message: 'Audio processing failed',
+                    error: error
+                });
+            }
+            
+            res.status(200).send({
+                message: 'Audio processed successfully',
+                transcription: result.trim(),
+                filename: req.file.originalname,
+                size: req.file.size + ' bytes'
+            });
+        });
+        
+    } catch (error) {
+        res.status(500).send({
+            message: 'Error processing audio',
+            error: error.message
+        });
+    }
 });
 
 // Only start server if this file is run directly
