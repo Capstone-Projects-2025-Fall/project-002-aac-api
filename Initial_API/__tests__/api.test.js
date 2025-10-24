@@ -50,4 +50,13 @@ describe('Basic API Tests', () => {
     expect(res.body).toHaveProperty('size');
   });
 
+  it('POST /upload with new file should return 200 and have message', async () =>{
+    const filePath = path.join(__dirname, 'test-audio.mp3');
+    const res = await request(app)
+      .post('/upload')
+      .attach('audioFile', filePath);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toHaveProperty('message');
+    println(res.body.transcription)
+  });
 });

@@ -62,7 +62,7 @@ app.post('/upload', upload.single("audioFile"), async (req, res) => {
     try {
         // Call Python script
         const python = spawn('python3', [
-            path.join(__dirname, 'speechRecognition.py')
+            path.join(__dirname, 'speech2.py')
         ]);
         
         // Send audio data to Python script via stdin
@@ -84,7 +84,7 @@ app.post('/upload', upload.single("audioFile"), async (req, res) => {
         // Wait for completion
         python.on('close', (code) => {
             if (code !== 0) {
-                return res.status(500).send({
+                return res.status(300).send({
                     message: 'Audio processing failed',
                     error: error
                 });
