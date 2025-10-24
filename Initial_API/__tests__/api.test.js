@@ -51,7 +51,7 @@ describe('Basic API Tests', () => {
   });
 
   it('POST /upload with new file should return 200 and have message', async () =>{
-    const filePath = path.join(__dirname, 'test-audio.mp3');
+    const filePath = path.join(__dirname, 'Recording.mp3');
     const res = await request(app)
       .post('/upload')
       .attach('audioFile', filePath);
