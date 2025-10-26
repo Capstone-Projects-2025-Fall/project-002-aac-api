@@ -414,7 +414,6 @@ const TicTacToe = () => {
         <p>Voice Commands:</p>
         <p>"top left", "center", "bottom right", "new game"</p>
         <p style={{ fontSize: '12px', marginTop: '10px' }}>
-          Note: Make sure your API is running at http://localhost:8080
         </p>
       </div>
     </div>
