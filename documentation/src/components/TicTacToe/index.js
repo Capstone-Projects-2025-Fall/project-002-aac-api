@@ -5,10 +5,14 @@ const TicTacToe = () => {
   const [player, setPlayer] = useState('X');
   const [winner, setWinner] = useState('');
   const [listening, setListening] = useState(false);
-  const [recognition, setRecognition] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [error, setError] = useState('');
   const playerRef = useRef('X');
   const boardRef = useRef(['', '', '', '', '', '', '', '', '']);
-  
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const audioContextRef = useRef(null);
+
   // Text-to-speech function
   const speak = (text) => {
     if ('speechSynthesis' in window) {
@@ -23,32 +27,91 @@ const TicTacToe = () => {
   const getPositionName = (index) => {
     const positionNames = [
       'top left', 'top center', 'top right',
-      'middle left', 'center', 'middle right', 
+      'middle left', 'center', 'middle right',
       'bottom left', 'bottom center', 'bottom right'
     ];
     return positionNames[index];
   };
 
-  useEffect(() => {
-    if ('webkitSpeechRecognition' in window) {
-      const SpeechRecognition = window.webkitSpeechRecognition;
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.lang = 'en-US';
-      
-      recognition.onresult = (event) => {
-        const command = event.results[event.results.length - 1][0].transcript.toLowerCase();
-        handleVoiceCommand(command);
-      };
-      
-      setRecognition(recognition);
+  // Convert audio blob to WAV format
+  const convertToWav = async (audioBlob) => {
+    try {
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+      // Convert to WAV
+      const wavBuffer = audioBufferToWav(audioBuffer);
+      const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' });
+
+      audioContext.close();
+      return wavBlob;
+    } catch (error) {
+      console.error('Error converting audio:', error);
+      throw error;
     }
-  }, []);
+  };
+
+  // Convert AudioBuffer to WAV format
+  const audioBufferToWav = (buffer) => {
+    const length = buffer.length * buffer.numberOfChannels * 2 + 44;
+    const arrayBuffer = new ArrayBuffer(length);
+    const view = new DataView(arrayBuffer);
+    const channels = [];
+    let offset = 0;
+    let pos = 0;
+
+    // Write WAV header
+    const setUint16 = (data) => {
+      view.setUint16(pos, data, true);
+      pos += 2;
+    };
+    const setUint32 = (data) => {
+      view.setUint32(pos, data, true);
+      pos += 4;
+    };
+
+    // "RIFF" chunk descriptor
+    setUint32(0x46464952); // "RIFF"
+    setUint32(length - 8); // file length - 8
+    setUint32(0x45564157); // "WAVE"
+
+    // "fmt " sub-chunk
+    setUint32(0x20746d66); // "fmt "
+    setUint32(16); // subchunk size
+    setUint16(1); // audio format (1 = PCM)
+    setUint16(buffer.numberOfChannels);
+    setUint32(buffer.sampleRate);
+    setUint32(buffer.sampleRate * 2 * buffer.numberOfChannels); // byte rate
+    setUint16(buffer.numberOfChannels * 2); // block align
+    setUint16(16); // bits per sample
+
+    // "data" sub-chunk
+    setUint32(0x61746164); // "data"
+    setUint32(length - pos - 4); // subchunk size
+
+    // Write interleaved data
+    for (let i = 0; i < buffer.numberOfChannels; i++) {
+      channels.push(buffer.getChannelData(i));
+    }
+
+    while (pos < length) {
+      for (let i = 0; i < buffer.numberOfChannels; i++) {
+        let sample = Math.max(-1, Math.min(1, channels[i][offset]));
+        sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+        view.setInt16(pos, sample, true);
+        pos += 2;
+      }
+      offset++;
+    }
+
+    return arrayBuffer;
+  };
 
   const handleVoiceCommand = (command) => {
-    console.log('Voice command:', command); // Debug log
-    
-    // Check for position commands FIRST to avoid false matches
+    console.log('Voice command:', command);
+    setError('');
+
     const positions = {
       'top left': 0, 'top center': 1, 'top right': 2,
       'middle left': 3, 'center': 4, 'middle right': 5,
@@ -59,10 +122,8 @@ const TicTacToe = () => {
       '6': 5, '7': 6, '8': 7, '9': 8
     };
 
-    // Try exact match first
     let position = positions[command];
-    
-    // If no exact match, try partial matches
+
     if (position === undefined) {
       for (const [key, value] of Object.entries(positions)) {
         if (command.includes(key)) {
@@ -71,46 +132,135 @@ const TicTacToe = () => {
         }
       }
     }
-    
+
     if (position !== undefined) {
-      console.log('Moving to position:', position, 'Current player:', playerRef.current); // Debug log
+      console.log('Moving to position:', position, 'Current player:', playerRef.current);
       handleClick(position);
       return;
     }
-    
-    // Only check for control commands if no position was found
+
     if (command === 'new game' || command === 'reset' || command.includes('new game') || command.includes('reset game')) {
-      console.log('Resetting game'); // Debug log
+      console.log('Resetting game');
       reset();
       return;
     }
-    
+
     if (command.includes('stop listening')) {
       stopListening();
       return;
     }
-    
-    if (command.includes('start listening')) {
-      startListening();
-      return;
-    }
-    
-    console.log('Command not recognized:', command); // Debug log
+
+    console.log('Command not recognized:', command);
+    setError(`Command not recognized: "${command}"`);
   };
 
-  const startListening = () => {
-    if (recognition) {
-      recognition.start();
+  const startListening = async () => {
+    try {
+      setError('');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      const mediaRecorder = new MediaRecorder(stream);
+
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+
+        try {
+          // Convert to WAV
+          const wavBlob = await convertToWav(audioBlob);
+          await sendAudioToAPI(wavBlob);
+        } catch (error) {
+          console.error('Error processing audio:', error);
+          setError('Error processing audio');
+          speak("Error processing audio");
+          setListening(false);
+        }
+
+        // Stop all tracks to release the microphone
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
       setListening(true);
+      setIsRecording(true);
       speak("Listening for voice commands");
+
+      // Auto-stop after 3 seconds to capture a command
+      setTimeout(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+          mediaRecorderRef.current.stop();
+          setIsRecording(false);
+        }
+      }, 3000);
+
+    } catch (error) {
+      console.error('Error accessing microphone:', error);
+      setError('Error accessing microphone');
+      speak("Error accessing microphone");
     }
   };
 
   const stopListening = () => {
-    if (recognition) {
-      recognition.stop();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+    setListening(false);
+    speak("Stopped listening");
+  };
+
+  const sendAudioToAPI = async (audioBlob) => {
+    try {
+      const formData = new FormData();
+      formData.append('audioFile', audioBlob, 'recording.wav');
+
+      console.log('Sending audio to API...', 'Size:', audioBlob.size, 'bytes');
+
+      const response = await fetch('http://localhost:8080/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await response.json();
+      console.log('API Response:', data);
+
+      if (response.status === 300) {
+        // Python script failed
+        console.error('Python script error:', data.error);
+        setError(`Processing failed: ${data.error || 'Unknown error'}`);
+        speak("Audio processing failed");
+        setListening(false);
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(`API returned status ${response.status}: ${data.message || 'Unknown error'}`);
+      }
+
+      if (data.transcription) {
+        console.log('Transcription:', data.transcription);
+        handleVoiceCommand(data.transcription.toLowerCase().trim());
+      } else {
+        setError('No transcription received');
+        speak("No transcription received");
+      }
+
+      // Ready for next command
       setListening(false);
-      speak("Stopped listening");
+
+    } catch (error) {
+      console.error('Error sending audio to API:', error);
+      setError(`API Error: ${error.message}`);
+      speak("Error processing audio");
+      setListening(false);
     }
   };
 
@@ -135,37 +285,34 @@ const TicTacToe = () => {
     if (currentBoard[index] || winner) return;
 
     const currentPlayer = playerRef.current;
-    console.log('Current player:', currentPlayer, 'Placing at index:', index); // Debug log
-    console.log('Board before move:', currentBoard); // Debug log
-    
+    console.log('Current player:', currentPlayer, 'Placing at index:', index);
+
     const newBoard = [...currentBoard];
     newBoard[index] = currentPlayer;
     setBoard(newBoard);
     boardRef.current = newBoard;
 
-    // Announce the move
     const positionName = getPositionName(index);
     speak(`${currentPlayer} has been placed in ${positionName}`);
-    
+
     const gameWinner = checkWinner(newBoard);
     if (gameWinner) {
-      console.log('Winner found:', gameWinner); // Debug log
+      console.log('Winner found:', gameWinner);
       setWinner(gameWinner);
       setTimeout(() => {
         speak(`Player ${gameWinner} wins!`);
       }, 1000);
     } else if (newBoard.every(cell => cell !== '')) {
-      console.log('Draw - board is full'); // Debug log
+      console.log('Draw - board is full');
       setWinner('draw');
       setTimeout(() => {
         speak("It's a draw!");
       }, 1000);
     } else {
       const nextPlayer = currentPlayer === 'X' ? 'O' : 'X';
-      console.log('Switching from', currentPlayer, 'to', nextPlayer); // Debug log
+      console.log('Switching from', currentPlayer, 'to', nextPlayer);
       setPlayer(nextPlayer);
       playerRef.current = nextPlayer;
-      console.log('Player state updated to:', nextPlayer); // Debug log
       setTimeout(() => {
         speak(`It's ${nextPlayer}'s turn`);
       }, 1500);
@@ -179,37 +326,37 @@ const TicTacToe = () => {
     setPlayer('X');
     playerRef.current = 'X';
     setWinner('');
+    setError('');
     speak("New game started. It's X's turn");
   };
 
-  console.log('Rendering with player:', player); // Debug log
-  
   return (
     <div style={{ textAlign: 'center', fontFamily: 'Arial' }}>
       <h1>Tic Tac Toe with Voice Control</h1>
-      
+
       {!winner && <h2>Current Player: {player}</h2>}
       {winner && winner !== 'draw' && <h2>Player {winner} wins!</h2>}
       {winner === 'draw' && <h2>It's a draw!</h2>}
-      
+
       <div style={{ marginBottom: '20px' }}>
-        <button 
-          onClick={listening ? stopListening : startListening}
+        <button
+          onClick={startListening}
+          disabled={listening}
           style={{
             padding: '10px 20px',
             fontSize: '16px',
-            backgroundColor: listening ? '#ff4444' : '#4CAF50',
+            backgroundColor: listening ? '#cccccc' : '#4CAF50',
             color: 'white',
             border: 'none',
             borderRadius: '5px',
-            cursor: 'pointer',
+            cursor: listening ? 'not-allowed' : 'pointer',
             marginRight: '10px'
           }}
         >
-          {listening ? 'Stop' : 'Start'}
+          {isRecording ? 'Recording...' : 'Record Command'}
         </button>
-        
-        <button 
+
+        <button
           onClick={reset}
           style={{
             padding: '10px 20px',
@@ -224,23 +371,30 @@ const TicTacToe = () => {
           New Game
         </button>
       </div>
-      
-      {listening && <p style={{ color: 'red' }}>🎤 Listening... Say positions like "top left", "center", "bottom right"</p>}
-      
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(3, 100px)', 
-        gap: '5px', 
+
+      {listening && (
+        <p style={{ color: 'red' }}>
+          🎤 {isRecording ? 'Recording... (3 seconds)' : 'Processing...'}
+        </p>
+      )}
+
+      {error && (
+        <p style={{ color: 'orange', fontSize: '14px', marginTop: '10px' }}>
+          ⚠️ {error}
+        </p>
+      )}
+
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, 100px)',
+        gap: '5px',
         justifyContent: 'center',
         margin: '20px auto'
       }}>
         {board.map((cell, index) => (
           <button
             key={index}
-            onClick={() => {
-              console.log('Button clicked for index:', index, 'Current player:', player);
-              handleClick(index);
-            }}
+            onClick={() => handleClick(index)}
             style={{
               width: '100px',
               height: '100px',
@@ -255,10 +409,13 @@ const TicTacToe = () => {
           </button>
         ))}
       </div>
-      
+
       <div style={{ marginTop: '20px', fontSize: '14px', color: '#666' }}>
         <p>Voice Commands:</p>
-        <p>"top left", "center", "bottom right", "new game", "start listening", "stop listening"</p>
+        <p>"top left", "center", "bottom right", "new game"</p>
+        <p style={{ fontSize: '12px', marginTop: '10px' }}>
+          Note: Make sure your API is running at http://localhost:8080
+        </p>
       </div>
     </div>
   );
