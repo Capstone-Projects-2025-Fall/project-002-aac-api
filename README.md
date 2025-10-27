@@ -27,7 +27,7 @@ Step 3: Start the Game
 Terminal 1 (Website):
 ```bash
 cd documentation
-ORG_NAME=your-org PROJECT_NAME=aac-api yarn start --host 0.0.0.0
+yarn start
 ```
 
 Terminal 2 (API):
