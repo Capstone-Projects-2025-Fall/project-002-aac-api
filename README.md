@@ -27,7 +27,21 @@ Currently undecided
 
 ## Background
 
-More research is needed
+Rudimentary How To Run Instructions:
+
+Required tools:
+
+npm, yarn, python3/pip, node.js, express.js
+
+Clone Project.
+
+Navigate to /Initial_API and run "npm install". Then, run "node ."
+
+Navigate to /documentation and run "yarn install", then "yarn start".
+
+This should open http://localhost:3000/undefined/ in your browser. Then, navigate to http://localhost:3000/undefined/tic-tac-toe
+
+The game should connect to the python API in order to process voice.
 
 ## Required Resources
 
