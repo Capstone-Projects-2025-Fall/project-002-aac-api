@@ -19,6 +19,7 @@
 
 const express = require('express');
 const multer = require('multer');
+const cors = require('cors');
 const app = express();
 const PORT = 8080;
 
@@ -29,7 +30,7 @@ const path = require('path');
 
 // Middleware to parse JSON
 app.use(express.json());
-
+app.use(cors());
 // GET
 app.get('/test', (req, res) => {
     res.status(200).send({
@@ -53,34 +54,34 @@ app.post('/test/:id', (req, res) => {
 });
 
 app.post('/upload', upload.single("audioFile"), async (req, res) => {
-    if(!req.file){
-        return res.status(418).send({message: 'No audio file uploaded'});
+    if (!req.file) {
+        return res.status(418).send({ message: 'No audio file uploaded' });
     }
-    
+
     const audioBuffer = req.file.buffer;
-    
+
     try {
         // Call Python script
         const python = spawn(process.platform === "win32" ? "python" : "python3", [
             path.join(__dirname, 'speech2.py')
         ]);
-        
+
         // Send audio data to Python script via stdin
         python.stdin.write(audioBuffer);
         python.stdin.end();
-        
+
         let result = '';
         let error = '';
-        
+
         // Collect output
         python.stdout.on('data', (data) => {
             result += data.toString();
         });
-        
+
         python.stderr.on('data', (data) => {
             error += data.toString();
         });
-        
+
         // Wait for completion
         python.on('close', (code) => {
             if (code !== 0) {
@@ -90,7 +91,7 @@ app.post('/upload', upload.single("audioFile"), async (req, res) => {
                     error: error
                 });
             }
-            
+
             res.status(200).send({
                 message: 'Audio processed successfully',
                 transcription: result.trim(),
@@ -98,7 +99,7 @@ app.post('/upload', upload.single("audioFile"), async (req, res) => {
                 size: req.file.size + ' bytes'
             });
         });
-        
+
     } catch (error) {
         res.status(500).send({
             message: 'Error processing audio',
