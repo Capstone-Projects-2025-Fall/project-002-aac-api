@@ -1,24 +1,45 @@
 # What's Changed
 
-**Complete AAC API Implementation** by Development Team in #1
-**Basic API Infrastructure** by Development Team in #2  
-**Speech-to-Text Integration** by Development Team in #3
-**Voice-Controlled Tic-Tac-Toe Game** by Development Team in #4
-**Text-to-Speech Integration** by Development Team in #5
-**API Input/Output Logging** by Development Team in #6
-**Comprehensive Testing Suite** by Development Team in #7
-**Documentation Site** by Development Team in #8
-**Error Handling & Edge Cases** by Development Team in #9
-**Student-Friendly README** by Development Team in #10
-**Production Release Documentation** by Development Team in #11
+**Initialize API** by @tuk45167 in #1
+**Update API page to specify which folder to navigate to** by @MohammadEisa in #2
+**Refactor Speech recognition to server side** by @GiovanniMuniz in #3
+**Return text output in API. CLI for now** by @tuk45167 in #4
+**Create rudimentary game to test API (Tic-Tac-Toe?)** by @ShrikanthSrenivas in #5
+**Integrate the API with audio** by @tuk45167 in #6
+**Look into Dev Ops for automated testing** by @ShrikanthSrenivas in #7
+**Return words to api (from speech engine)** by @ShrikanthSrenivas in #8
+**Add client-facing functions to the API** by @GiovanniMuniz in #9
+**Conceptualize the API functions** by @EricSmith in #10
+**Look more into API frameworks** by @KieranPlenn in #11
+**Connect the API to a game element to verify input** by @ShrikanthSrenivas in #12
+**Create Documentation for Test** by @KieranPlenn in #13
+**Update/Create Documentation for API** by @ShrikanthSrenivas in #14
+**Integrate the speech recognition file into the API** by @GiovanniMuniz in #15
+**Integrate SwaggerDocs into Docusaurus** by @GiovanniMuniz in #16
+**Add (automated) testing** by @MohammadEisa in #17
+**Read Hungry Hungry Hippos Documentation** by @KieranPlenn in #18
+**Read OrderUp Docs** by @MohammadEisa in #19
+**Choose an AAC board for testing** by @MohammadEisa in #20
+**Decide Local or Cloud processing** by @ShrikanthSrenivas in #21
+**Decide Language** by @ShrikanthSrenivas in #22
+**Read StoryQuest Doc** by @ShrikanthSrenivas in #23
+**Read Scribblers Docs** by @GiovanniMuniz in #24
+**Confirm system microphone access on Windows with CLI** by @ShrikanthSrenivas in #25
+**Add start and stop recording functions to API** by @ShrikanthSrenivas in #26
+**Edit our tic-tac-toe game to call API (local)** by @MohammadEisa in #27
+**Add command to stop running API** by @MohammadEisa in #28
 
 ## New Contributors
-@DevelopmentTeam made their first contribution in #1
+@tuk45167 made their first contribution in #1
+@MohammadEisa made their first contribution in #2
+@GiovanniMuniz made their first contribution in #3
+@EricSmith made their first contribution in #10
+@KieranPlenn made their first contribution in #11
 
 ## Full Changelog: Initial Release...v1.0.0
 
 ## Contributors
-@DevelopmentTeam
+@tuk45167 @MohammadEisa @GiovanniMuniz @ShrikanthSrenivas @EricSmith @KieranPlenn
 
 ## Assets
 - Source code (zip)
@@ -26,20 +47,41 @@
 
 ---
 
-## Jira Stories Completed (8/8 - 100%)
+## Jira Stories Completed (28/28 - 100%)
 
-| Story ID | Title | Status | Points |
-|----------|-------|--------|--------|
-| AAC-001 | Basic API Infrastructure | ✅ Completed | 5 |
-| AAC-002 | Speech-to-Text Integration | ✅ Completed | 8 |
-| AAC-003 | Voice-Controlled Tic-Tac-Toe Game | ✅ Completed | 13 |
-| AAC-004 | Text-to-Speech Integration | ✅ Completed | 5 |
-| AAC-005 | API Input/Output Logging | ✅ Completed | 8 |
-| AAC-006 | Comprehensive Testing | ✅ Completed | 8 |
-| AAC-007 | Documentation Site | ✅ Completed | 5 |
-| AAC-008 | Error Handling & Edge Cases | ✅ Completed | 5 |
+| Story Key | Summary | Sprint | Assignee |
+|-----------|---------|--------|----------|
+| AAC-7, AP2-19 | Initialize API | AP2 Sprint 2 | tuk45167 |
+| AP2-42 | Update API page to specify which folder to navigate to | AP2 Sprint 3 | Mohammad Eisa |
+| AP2-40 | Refactor Speech recognition to server side | AP2 Sprint 3 | Giovanni Muniz |
+| AP2-15, AP2-9 | Return text output in API. CLI for now | AP2 Sprint 3 | tuk45167 |
+| AP2-15, AP2-32 | Create rudimentary game to test API (Tic-Tac-Toe?) | AP2 Sprint 2 | Shrikanth Srenivas |
+| AP2-35 | Integrate the API with audio | AP2 Sprint 3 | tuk45167 |
+| AP2-34 | Look into Dev Ops for automated testing | AP2 Sprint 2 | Shrikanth Srenivas |
+| AAC-18, AP2-12 | Return words to api (from speech engine) | AP2 Sprint 3 | Shrikanth Srenivas |
+| AP2-39 | Add client-facing functions to the API | AP2 Sprint 3 | Giovanni Muniz |
+| AP2-37 | Conceptualize the API functions | AP2 Sprint 3 | Eric Smith |
+| AP2-36 | Look more into API frameworks | AP2 Sprint 3 | Kieran Plenn |
+| AAC-18, AP2-18 | Connect the API to a game element to verify input | AP2 Sprint 2 | Shrikanth Srenivas |
+| AP2-33 | Create Documentation for Test | AP2 Sprint 2 | Kieran Plenn |
+| AP2-17, AP2-29 | Update/Create Documentation for API | AP2 Sprint 2 | Shrikanth Srenivas |
+| AP2-15, AP2-1 | Integrate the speech recognition file into the API | AP2 Sprint 3 | Giovanni Muniz |
+| AP2-15, AP2-16 | Integrate SwaggerDocs into Docusaurus | AP2 Sprint 2 | Giovanni Muniz |
+| AAC-18, AP2-27 | Add (automated) testing | AP2 Sprint 2 | Mohammad Eisa |
+| AAC-18, AP2-23 | Read Hungry Hungry Hippos Documentation | AP2 Sprint 1 | Kieran Plenn |
+| AAC-18, AP2-24 | Read OrderUp Docs | AP2 Sprint 1 | Mohammad Eisa |
+| AP2-17, AP2-31 | Choose an AAC board for testing | AP2 Sprint 1 | Mohammad Eisa |
+| AP2-17, AP2-22 | Decide Local or Cloud processing | AP2 Sprint 1 | Shrikanth Srenivas |
+| AP2-17, AP2-21 | Decide Language | AP2 Sprint 1 | Shrikanth Srenivas |
+| AAC-18, AP2-25 | Read StoryQuest Doc | AP2 Sprint 1 | Shrikanth Srenivas |
+| AAC-18, AP2-26 | Read Scribblers Docs | AP2 Sprint 1 | Giovanni Muniz |
+| AP2-15, AP2-2 | Confirm system microphone access on Windows with CLI | AP2 Sprint 1 | Shrikanth Srenivas |
+| AP2-15, AP2-7 | Add start and stop recording functions to API | AP2 Sprint 1 | Shrikanth Srenivas |
+| AP2-44 | Edit our tic-tac-toe game to call API (local) | AP2 Sprint 3 | Mohammad Eisa |
+| AP2-43 | Add command to stop running API | AP2 Sprint 3 | Mohammad Eisa |
 
-**Total Velocity**: 57 story points
+**Total Stories**: 28 completed  
+**Sprints**: AP2 Sprint 1, AP2 Sprint 2, AP2 Sprint 3
 
 ## Quick Start
 
@@ -60,22 +102,5 @@ node .
 
 # Play: http://localhost:3000/aac-api/tic-tac-toe
 ```
-
-## Features
-
-- Voice-controlled Tic-Tac-Toe game
-- Real-time API logging under game board
-- Speech-to-text and text-to-speech integration
-- Complete documentation site
-- 100% test coverage
-- Student-friendly setup instructions
-
-## Technical Stack
-
-- React frontend with Docusaurus
-- Node.js Express API backend
-- Python SpeechRecognition library
-- Jest testing framework
-- Cross-platform compatibility
 
 Perfect for classroom demonstration and QA testing!
