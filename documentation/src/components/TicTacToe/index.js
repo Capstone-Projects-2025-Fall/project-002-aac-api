@@ -7,6 +7,7 @@ const TicTacToe = () => {
   const [listening, setListening] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [error, setError] = useState('');
+  const [apiLogs, setApiLogs] = useState([]);
   const playerRef = useRef('X');
   const boardRef = useRef(['', '', '', '', '', '', '', '', '']);
   const mediaRecorderRef = useRef(null);
@@ -21,6 +22,18 @@ const TicTacToe = () => {
       utterance.pitch = 1;
       speechSynthesis.speak(utterance);
     }
+  };
+
+  // Add API log entry
+  const addApiLog = (type, data) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = {
+      id: Date.now(),
+      timestamp,
+      type,
+      data: JSON.stringify(data, null, 2)
+    };
+    setApiLogs(prev => [...prev.slice(-4), logEntry]); // Keep last 5 entries
   };
 
   // Get position name for audio announcement
@@ -112,6 +125,13 @@ const TicTacToe = () => {
     console.log('Voice command:', command);
     setError('');
 
+    // Log voice command processing
+    addApiLog('COMMAND', {
+      rawCommand: command,
+      currentPlayer: playerRef.current,
+      timestamp: new Date().toISOString()
+    });
+
     const positions = {
       'top left': 0, 'top center': 1, 'top right': 2,
       'middle left': 3, 'center': 4, 'middle right': 5,
@@ -135,22 +155,40 @@ const TicTacToe = () => {
 
     if (position !== undefined) {
       console.log('Moving to position:', position, 'Current player:', playerRef.current);
+      addApiLog('ACTION', {
+        action: 'place_mark',
+        position: position,
+        player: playerRef.current,
+        positionName: getPositionName(position)
+      });
       handleClick(position);
       return;
     }
 
     if (command === 'new game' || command === 'reset' || command.includes('new game') || command.includes('reset game')) {
       console.log('Resetting game');
+      addApiLog('ACTION', {
+        action: 'reset_game',
+        command: command
+      });
       reset();
       return;
     }
 
     if (command.includes('stop listening')) {
+      addApiLog('ACTION', {
+        action: 'stop_listening',
+        command: command
+      });
       stopListening();
       return;
     }
 
     console.log('Command not recognized:', command);
+    addApiLog('ERROR', {
+      error: 'Command not recognized',
+      command: command
+    });
     setError(`Command not recognized: "${command}"`);
   };
 
@@ -224,6 +262,15 @@ const TicTacToe = () => {
 
       console.log('Sending audio to API...', 'Size:', audioBlob.size, 'bytes');
 
+      // Log API request
+      addApiLog('REQUEST', {
+        method: 'POST',
+        url: 'http://localhost:8080/upload',
+        contentType: 'multipart/form-data',
+        audioSize: `${audioBlob.size} bytes`,
+        filename: 'recording.wav'
+      });
+
       const response = await fetch('http://localhost:8080/upload', {
         method: 'POST',
         body: formData
@@ -231,6 +278,13 @@ const TicTacToe = () => {
 
       const data = await response.json();
       console.log('API Response:', data);
+
+      // Log API response
+      addApiLog('RESPONSE', {
+        status: response.status,
+        statusText: response.statusText,
+        data: data
+      });
 
       if (response.status === 300) {
         // Python script failed
@@ -327,6 +381,7 @@ const TicTacToe = () => {
     playerRef.current = 'X';
     setWinner('');
     setError('');
+    setApiLogs([]); // Clear API logs on reset
     speak("New game started. It's X's turn");
   };
 
@@ -408,6 +463,70 @@ const TicTacToe = () => {
             {cell}
           </button>
         ))}
+      </div>
+
+      {/* API Input/Output Display */}
+      <div style={{ 
+        marginTop: '30px', 
+        padding: '20px', 
+        backgroundColor: '#f8f9fa', 
+        border: '1px solid #dee2e6', 
+        borderRadius: '8px',
+        maxWidth: '800px',
+        margin: '30px auto'
+      }}>
+        <h3 style={{ margin: '0 0 15px 0', color: '#333', fontSize: '18px' }}>
+          🔍 API Input/Output Log
+        </h3>
+        
+        {apiLogs.length === 0 ? (
+          <p style={{ color: '#666', fontStyle: 'italic' }}>
+            No API interactions yet. Try using voice commands!
+          </p>
+        ) : (
+          <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+            {apiLogs.map((log) => (
+              <div key={log.id} style={{ 
+                marginBottom: '15px', 
+                padding: '10px', 
+                backgroundColor: 'white', 
+                border: '1px solid #e9ecef',
+                borderRadius: '4px',
+                fontSize: '12px'
+              }}>
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  marginBottom: '8px'
+                }}>
+                  <span style={{ 
+                    fontWeight: 'bold',
+                    color: log.type === 'REQUEST' ? '#007bff' : 
+                           log.type === 'RESPONSE' ? '#28a745' :
+                           log.type === 'COMMAND' ? '#6f42c1' :
+                           log.type === 'ACTION' ? '#fd7e14' :
+                           log.type === 'ERROR' ? '#dc3545' : '#6c757d'
+                  }}>
+                    {log.type}
+                  </span>
+                  <span style={{ color: '#666', fontSize: '11px' }}>
+                    {log.timestamp}
+                  </span>
+                </div>
+                <pre style={{ 
+                  margin: 0, 
+                  whiteSpace: 'pre-wrap', 
+                  wordBreak: 'break-word',
+                  fontSize: '11px',
+                  color: '#333'
+                }}>
+                  {log.data}
+                </pre>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={{ marginTop: '20px', fontSize: '14px', color: '#666' }}>
