@@ -22,11 +22,66 @@ const multer = require('multer');
 const cors = require('cors');
 const app = express();
 const PORT = 8080;
+const fs = require('fs');
+const { spawn } = require('child_process');
+const path = require('path');
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
-const { spawn } = require('child_process');
-const path = require('path');
+
+// Directory for storing logs (with consent)
+const LOG_DIR = path.join(__dirname, 'logs');
+if (!fs.existsSync(LOG_DIR)) {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+}
+
+// Helper function to parse user agent
+function parseUserAgent(userAgent) {
+    if (!userAgent) return { browser: 'Unknown', device: 'Unknown' };
+    
+    const ua = userAgent.toLowerCase();
+    let browser = 'Unknown';
+    let device = 'Unknown';
+    
+    // Detect browser
+    if (ua.includes('chrome') && !ua.includes('edg')) browser = 'Chrome';
+    else if (ua.includes('firefox')) browser = 'Firefox';
+    else if (ua.includes('safari') && !ua.includes('chrome')) browser = 'Safari';
+    else if (ua.includes('edg')) browser = 'Edge';
+    else if (ua.includes('opera')) browser = 'Opera';
+    
+    // Detect device
+    if (ua.includes('mobile') || ua.includes('android') || ua.includes('iphone')) device = 'Mobile';
+    else if (ua.includes('tablet') || ua.includes('ipad')) device = 'Tablet';
+    else device = 'Desktop';
+    
+    return { browser, device };
+}
+
+// Helper function to log request data (with consent)
+function logRequest(data, consentGiven) {
+    if (!consentGiven) return; // Only log if consent is given
+    
+    const logFile = path.join(LOG_DIR, `requests-${new Date().toISOString().split('T')[0]}.json`);
+    const logEntry = {
+        timestamp: new Date().toISOString(),
+        ...data
+    };
+    
+    // Append to log file
+    let logs = [];
+    if (fs.existsSync(logFile)) {
+        try {
+            const content = fs.readFileSync(logFile, 'utf8');
+            logs = JSON.parse(content);
+        } catch (e) {
+            logs = [];
+        }
+    }
+    
+    logs.push(logEntry);
+    fs.writeFileSync(logFile, JSON.stringify(logs, null, 2));
+}
 
 // Middleware to parse JSON
 app.use(express.json());
@@ -54,11 +109,47 @@ app.post('/test/:id', (req, res) => {
 });
 
 app.post('/upload', upload.single("audioFile"), async (req, res) => {
+    // Capture request metadata even for error cases
+    const requestTime = new Date().toISOString();
+    const userAgent = req.get('user-agent') || 'Unknown';
+    const { browser, device } = parseUserAgent(userAgent);
+    const userId = req.get('x-user-id') || req.body.userId || req.get('x-session-id') || null;
+    
     if (!req.file) {
-        return res.status(418).send({ message: 'No audio file uploaded' });
+        const errorResponse = {
+            success: false,
+            transcription: null,
+            audio: null,
+            request: {
+                timestamp: requestTime,
+                device: device,
+                browser: browser,
+                userAgent: userAgent
+            },
+            user: userId ? { id: userId } : undefined,
+            error: {
+                code: 'NO_FILE',
+                message: 'No audio file uploaded'
+            }
+        };
+        return res.status(418).send(errorResponse);
     }
 
+    // Check for logging consent (default to true for development/testing)
+    // In production, this should be explicitly set by the client
+    const consentGiven = req.get('x-logging-consent') === 'true' || 
+                        req.body.loggingConsent === true ||
+                        process.env.NODE_ENV !== 'production'; // Auto-consent in development
+
     const audioBuffer = req.file.buffer;
+    const filename = req.file.originalname;
+    const fileSize = req.file.size;
+    
+    // Detect format from filename extension
+    const fileExtension = filename.split('.').pop()?.toUpperCase() || 'UNKNOWN';
+    const detectedFormat = ['WAV', 'MP3', 'FLAC', 'AIFF', 'OGG', 'M4A'].includes(fileExtension) 
+        ? fileExtension 
+        : 'WAV'; // Default to WAV if unknown
 
     try {
         // Call Python script
@@ -84,27 +175,126 @@ app.post('/upload', upload.single("audioFile"), async (req, res) => {
 
         // Wait for completion
         python.on('close', (code) => {
-            if (code !== 0) {
-                return res.status(300).send({
-                    pyCode: code,
-                    message: 'Audio processing failed',
-                    error: error
-                });
+            let pythonResult = null;
+            let transcription = null;
+            let duration = null;
+            let format = detectedFormat;
+            let sampleRate = null;
+            let success = false;
+            let errorCode = null;
+            let errorMessage = null;
+
+            // Try to parse JSON response from Python
+            try {
+                const trimmedResult = result.trim();
+                if (trimmedResult) {
+                    pythonResult = JSON.parse(trimmedResult);
+                    success = pythonResult.success === true;
+                    transcription = pythonResult.transcription || null;
+                    duration = pythonResult.duration || null;
+                    format = pythonResult.format || format;
+                    sampleRate = pythonResult.sample_rate || null;
+                    
+                    if (!success) {
+                        errorCode = pythonResult.error_code || 'PROCESSING_ERROR';
+                        errorMessage = pythonResult.error_message || 'Unknown error';
+                    }
+                }
+            } catch (parseError) {
+                // Fallback: if JSON parsing fails, treat as plain text transcription
+                transcription = result.trim() || null;
+                success = code === 0 && transcription !== null && transcription !== '';
+                if (!success) {
+                    errorCode = 'PARSE_ERROR';
+                    errorMessage = 'Failed to parse Python script output';
+                }
             }
 
-            res.status(200).send({
-                message: 'Audio processed successfully',
-                transcription: result.trim(),
-                filename: req.file.originalname,
-                size: req.file.size + ' bytes'
-            });
+            // Build comprehensive response
+            const responseData = {
+                success: success && code === 0,
+                transcription: transcription,
+                
+                // Audio file metadata
+                audio: {
+                    filename: filename,
+                    size: fileSize,
+                    sizeBytes: fileSize,
+                    format: format,
+                    duration: duration, // in seconds
+                    sampleRate: sampleRate,
+                    mimeType: req.file.mimetype || `audio/${format.toLowerCase()}`
+                },
+                
+                // Request metadata
+                request: {
+                    timestamp: requestTime,
+                    device: device,
+                    browser: browser,
+                    userAgent: userAgent
+                },
+                
+                // User identifier (only included if provided)
+                user: userId ? { id: userId } : undefined,
+                
+                // Error information (if any)
+                error: success ? undefined : {
+                    code: errorCode || `PYTHON_EXIT_${code}`,
+                    message: errorMessage || error || 'Audio processing failed',
+                    pythonExitCode: code
+                }
+            };
+
+            // Log request server-side (with consent)
+            if (consentGiven) {
+                logRequest({
+                    ...responseData,
+                    audioBufferSize: audioBuffer.length,
+                    ipAddress: req.ip || req.connection.remoteAddress
+                }, consentGiven);
+            }
+
+            // Send response
+            if (code !== 0 || !success) {
+                return res.status(300).send(responseData);
+            }
+
+            res.status(200).send(responseData);
         });
 
     } catch (error) {
-        res.status(500).send({
-            message: 'Error processing audio',
-            error: error.message
-        });
+        const errorResponse = {
+            success: false,
+            transcription: null,
+            audio: {
+                filename: filename,
+                size: fileSize,
+                sizeBytes: fileSize,
+                format: detectedFormat
+            },
+            request: {
+                timestamp: requestTime,
+                device: device,
+                browser: browser,
+                userAgent: userAgent
+            },
+            user: userId ? { id: userId } : undefined,
+            error: {
+                code: 'SERVER_ERROR',
+                message: error.message
+            }
+        };
+
+        // Log error (with consent)
+        if (consentGiven) {
+            logRequest({
+                ...errorResponse,
+                audioBufferSize: audioBuffer ? audioBuffer.length : 0,
+                ipAddress: req.ip || req.connection.remoteAddress
+            }, consentGiven);
+        }
+
+        res.status(500).send(errorResponse);
     }
 });
 
