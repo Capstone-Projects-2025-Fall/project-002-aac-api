@@ -70,6 +70,9 @@ describe('Basic API Tests', () => {
 
   it('POST /upload should capture user identifier from header', async () => {
     const filePath = path.join(__dirname, 'TestRecording.wav');
+  //checking if staus code is correct when file cannot be transcribed
+  it('POST /upload with empty file should return 300 and message', async () => {
+    const filePath = path.join(__dirname, 'test-audio.mp3');
     const res = await request(app)
       .post('/upload')
       .set('X-User-Id', 'test-user-123')
@@ -82,6 +85,13 @@ describe('Basic API Tests', () => {
   });
 
   it('POST /upload should include logging consent header', async () => {
+    expect(res.statusCode).toBe(300);
+    expect(res.body).toHaveProperty('message');
+    expect(res.body.message).toMatch(/Audio processing failed/i);
+  });
+
+  //checking if status code is correct when file is given able to be transcribed
+  it('POST /upload with TestRecording file should return 200 and have message', async () =>{
     const filePath = path.join(__dirname, 'TestRecording.wav');
     const res = await request(app)
       .post('/upload')
@@ -97,6 +107,10 @@ describe('Basic API Tests', () => {
 
   it('POST /upload should return error information on failure', async () => {
     // This test verifies error structure when processing fails
+  });
+
+  //checking if speech to text is accurate to the file
+    it('POST /upload with TestRecording file should return correct transcript', async () =>{
     const filePath = path.join(__dirname, 'TestRecording.wav');
     const res = await request(app)
       .post('/upload')
@@ -109,5 +123,6 @@ describe('Basic API Tests', () => {
       expect(res.body.error).toHaveProperty('code');
       expect(res.body.error).toHaveProperty('message');
     }
+    expect(res.body.transcription).toMatch(/ice cream trucks are really cool/i);
   });
 });

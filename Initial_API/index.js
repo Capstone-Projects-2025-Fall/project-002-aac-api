@@ -15,6 +15,12 @@
  * - added new post function for uploading audio file and recieving back a message
  * - new tests added to confirm responses for when file is and isnt attached to the request
  * - audio processing to translate speech to text still needed
+ * 
+ * Update:
+ * - get and post functions removed because of unnessarity
+ * - tests related to those functions also removed
+ * - tests for upload function cleaned up
+ * 
  */
 
 const express = require('express');
@@ -86,27 +92,7 @@ function logRequest(data, consentGiven) {
 // Middleware to parse JSON
 app.use(express.json());
 app.use(cors());
-// GET
-app.get('/test', (req, res) => {
-    res.status(200).send({
-        name: 'Test1',
-        status: 'test'
-    });
-});
 
-// POST
-app.post('/test/:id', (req, res) => {
-    const { id } = req.params;
-    const { info } = req.body;
-
-    if (!info) {
-        return res.status(418).send({ message: 'No info!' });
-    }
-
-    res.send({
-        name: `Test message with info: ${info} and ID: ${id}`,
-    });
-});
 
 app.post('/upload', upload.single("audioFile"), async (req, res) => {
     // Capture request metadata even for error cases
