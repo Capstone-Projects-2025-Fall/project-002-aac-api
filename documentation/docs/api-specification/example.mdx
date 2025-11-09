@@ -13,9 +13,23 @@ import TicTacToe from "@site/src/components/TicTacToe/index.js";
 
 <Game />
 
+<p>
 ```jsx title="/src/components/BasicTic/App.js"
-
+      const moves = history.map((squares, move) => {
+    let description;
+    if (move > 0) {
+      description = 'Go to move #' + move;
+    } else {
+      description = 'Go to game start';
+    }
+    return (
+      <li key={move}>
+        <button onClick={() => jumpTo(move)}>{description}</button>
+      </li>
+    );
+  });
 ```
+</p>
 
 <TicTacToe />
 
