@@ -20,9 +20,10 @@ const TicTacToe = () => {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 0.8;
       utterance.pitch = 1;
-      speechSynthesis.speak(utterance);
+      //speechSynthesis.speak(utterance);
     }
   };
+  
 
   // Add API log entry
   const addApiLog = (type, data) => {
