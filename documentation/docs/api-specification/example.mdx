@@ -34,17 +34,44 @@ import TicTacToe from "@site/src/components/TicTacToe/index.js";
 <TicTacToe />
 
 ```jsx title="/src/components/TicTacToe/index.js"
-      const moves = history.map((squares, move) => {
-    let description;
-    if (move > 0) {
-      description = 'Go to move #' + move;
+  const handleClick = (index) => {
+    const currentBoard = boardRef.current;
+    if (currentBoard[index] || winner) return;
+
+    const currentPlayer = playerRef.current;
+    console.log('Current player:', currentPlayer, 'Placing at index:', index);
+
+    // highlight-start
+    const newBoard = [...currentBoard];
+    newBoard[index] = currentPlayer;
+    setBoard(newBoard);
+    boardRef.current = newBoard;
+    // highlight-end
+
+    const positionName = getPositionName(index);
+    speak(`${currentPlayer} has been placed in ${positionName}`);
+
+    const gameWinner = checkWinner(newBoard);
+    if (gameWinner) {
+      console.log('Winner found:', gameWinner);
+      setWinner(gameWinner);
+      setTimeout(() => {
+        speak(`Player ${gameWinner} wins!`);
+      }, 1000);
+    } else if (newBoard.every(cell => cell !== '')) {
+      console.log('Draw - board is full');
+      setWinner('draw');
+      setTimeout(() => {
+        speak("It's a draw!");
+      }, 1000);
     } else {
-      description = 'Go to game start';
+      const nextPlayer = currentPlayer === 'X' ? 'O' : 'X';
+      console.log('Switching from', currentPlayer, 'to', nextPlayer);
+      setPlayer(nextPlayer);
+      playerRef.current = nextPlayer;
+      setTimeout(() => {
+        speak(`It's ${nextPlayer}'s turn`);
+      }, 1500);
     }
-    return (
-      <li key={move}>
-        <button onClick={() => jumpTo(move)}>{description}</button>
-      </li>
-    );
-  });
+  };
 ```
