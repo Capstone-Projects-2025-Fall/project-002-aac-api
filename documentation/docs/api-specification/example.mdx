@@ -1,11 +1,74 @@
 ---
 sidebar_position: 4
+sidebar_label: TicTacToe
 ---
+import TicTacToe from "@site/src/components/TicTacToe/index.js";
 
-# TicTacToe Example
+# TicTacToe
 
-import TicTacToe from "../../src/components/TicTacToe/index.js";
 
-## Try me!
+<p>
+```jsx title="@site/src/components/TicTacToe/index.js"
+  const handleClick = (index) => {
+    const currentBoard = boardRef.current;
+    if (currentBoard[index] || winner) return;
+
+    const currentPlayer = playerRef.current;
+    console.log('Current player:', currentPlayer, 'Placing at index:', index);
+
+    // highlight-start
+    const newBoard = [...currentBoard];
+    newBoard[index] = currentPlayer;
+    setBoard(newBoard);
+    boardRef.current = newBoard;
+    // highlight-end
+
+    const positionName = getPositionName(index);
+    speak(`${currentPlayer} has been placed in ${positionName}`);
+
+    const gameWinner = checkWinner(newBoard);
+    if (gameWinner) {
+      console.log('Winner found:', gameWinner);
+      setWinner(gameWinner);
+      setTimeout(() => {
+        speak(`Player ${gameWinner} wins!`);
+      }, 1000);
+    } else if (newBoard.every(cell => cell !== '')) {
+      console.log('Draw - board is full');
+      setWinner('draw');
+      setTimeout(() => {
+        speak("It's a draw!");
+      }, 1000);
+    } else {
+      const nextPlayer = currentPlayer === 'X' ? 'O' : 'X';
+      console.log('Switching from', currentPlayer, 'to', nextPlayer);
+      setPlayer(nextPlayer);
+      playerRef.current = nextPlayer;
+      setTimeout(() => {
+        speak(`It's ${nextPlayer}'s turn`);
+      }, 1500);
+    }
+  };
+```
+</p>
 
 <TicTacToe />
+
+
+```jsx title="@site/src/components/TicTacToe/index.js"
+      const response = await fetch('http://localhost:8080/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      ...
+```
+
+```jsx title="/Initial_API/index.js"
+            res.status(200).send({
+                message: 'Audio processed successfully',
+                transcription: result.trim(),
+                filename: req.file.originalname,
+                size: req.file.size + ' bytes'
+            });
+```

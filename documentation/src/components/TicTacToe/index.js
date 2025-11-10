@@ -20,9 +20,10 @@ const TicTacToe = () => {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 0.8;
       utterance.pitch = 1;
-      speechSynthesis.speak(utterance);
+      //speechSynthesis.speak(utterance);
     }
   };
+  
 
   // Add API log entry
   const addApiLog = (type, data) => {
@@ -237,7 +238,7 @@ const TicTacToe = () => {
           mediaRecorderRef.current.stop();
           setIsRecording(false);
         }
-      }, 3000);
+      }, 5000);
 
     } catch (error) {
       console.error('Error accessing microphone:', error);
@@ -439,31 +440,38 @@ const TicTacToe = () => {
         </p>
       )}
 
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, 100px)',
-        gap: '5px',
-        justifyContent: 'center',
-        margin: '20px auto'
-      }}>
-        {board.map((cell, index) => (
-          <button
-            key={index}
-            onClick={() => handleClick(index)}
-            style={{
-              width: '100px',
-              height: '100px',
-              fontSize: '30px',
-              border: '2px solid black',
-              backgroundColor: 'white',
-              cursor: cell || winner ? 'not-allowed' : 'pointer'
-            }}
-            disabled={cell || winner}
-          >
-            {cell}
-          </button>
-        ))}
-      </div>
+<div style={{
+  display: 'grid',
+  gridTemplateColumns: 'repeat(3, 100px)',
+  gap: '5px',
+  justifyContent: 'center',
+  margin: '20px auto'
+}}>
+  {board.map((cell, index) => {
+    const labels = ['top left', 'top center', 'top right', 
+                    'middle left', 'center', 'middle right', 
+                    'bottom left', 'bottom center', 'bottom right'];
+    
+    return (
+      <button
+        key={index}
+        onClick={() => handleClick(index)}
+        style={{
+          width: '100px',
+          height: '100px',
+          fontSize: cell ? '30px' : '12px',
+          border: '2px solid black',
+          backgroundColor: 'white',
+          cursor: cell || winner ? 'not-allowed' : 'pointer',
+          color: cell ? 'black' : '#999'
+        }}
+        disabled={cell || winner}
+      >
+        {cell || labels[index]}
+      </button>
+    );
+  })}
+</div>
 
       {/* API Input/Output Display */}
       <div style={{ 
