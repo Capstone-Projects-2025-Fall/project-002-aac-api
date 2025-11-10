@@ -8,11 +8,14 @@ const TicTacToe = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [error, setError] = useState('');
   const [apiLogs, setApiLogs] = useState([]);
+  const [continuousMode, setContinuousMode] = useState(false);
   const playerRef = useRef('X');
   const boardRef = useRef(['', '', '', '', '', '', '', '', '']);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const audioContextRef = useRef(null);
+  const streamRef = useRef(null);
+  const continuousModeRef = useRef(false);
 
   // Text-to-speech function
   const speak = (text) => {
@@ -181,7 +184,7 @@ const TicTacToe = () => {
         action: 'stop_listening',
         command: command
       });
-      stopListening();
+      stopContinuousListening();
       return;
     }
 
@@ -193,6 +196,114 @@ const TicTacToe = () => {
     setError(`Command not recognized: "${command}"`);
   };
 
+  // Start continuous listening mode
+  const startContinuousListening = async () => {
+    try {
+      setError('');
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      continuousModeRef.current = true;
+      setContinuousMode(true);
+      setListening(true);
+
+      speak("Continuous listening activated. I'm always listening for your commands.");
+      addApiLog('SYSTEM', {
+        message: 'Continuous listening mode started',
+        timestamp: new Date().toISOString()
+      });
+
+      // Start the recording cycle
+      recordNextChunk();
+
+    } catch (error) {
+      console.error('Error accessing microphone:', error);
+      setError('Error accessing microphone');
+      speak("Error accessing microphone");
+    }
+  };
+
+  // Record and process audio chunks continuously
+  const recordNextChunk = () => {
+    if (!streamRef.current || !continuousModeRef.current) {
+      return;
+    }
+
+    const mediaRecorder = new MediaRecorder(streamRef.current);
+    mediaRecorderRef.current = mediaRecorder;
+    audioChunksRef.current = [];
+
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        audioChunksRef.current.push(event.data);
+      }
+    };
+
+    mediaRecorder.onstop = async () => {
+      // Only process if we're still in continuous mode
+      if (!continuousModeRef.current) {
+        return;
+      }
+
+      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+
+      // Only send if audio is substantial (more than 1KB to avoid silence)
+      if (audioBlob.size > 1000) {
+        setIsRecording(false);
+        try {
+          const wavBlob = await convertToWav(audioBlob);
+          await sendAudioToAPI(wavBlob);
+        } catch (error) {
+          console.error('Error processing audio:', error);
+          addApiLog('ERROR', {
+            error: 'Audio processing failed',
+            message: error.message
+          });
+        }
+      }
+
+      // Schedule next recording chunk if still in continuous mode
+      if (continuousModeRef.current) {
+        setTimeout(() => {
+          recordNextChunk();
+        }, 100); // Small delay before next chunk
+      }
+    };
+
+    mediaRecorder.start();
+    setIsRecording(true);
+
+    // Record for 3 seconds then process
+    setTimeout(() => {
+      if (mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+      }
+    }, 3000);
+  };
+
+  // Stop continuous listening mode
+  const stopContinuousListening = () => {
+    continuousModeRef.current = false;
+    setContinuousMode(false);
+    setListening(false);
+    setIsRecording(false);
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+
+    speak("Continuous listening stopped");
+    addApiLog('SYSTEM', {
+      message: 'Continuous listening mode stopped',
+      timestamp: new Date().toISOString()
+    });
+  };
+
+  // Original single-shot listening (kept for compatibility)
   const startListening = async () => {
     try {
       setError('');
@@ -290,9 +401,11 @@ const TicTacToe = () => {
       if (response.status === 300) {
         // Python script failed
         console.error('Python script error:', data.error);
-        setError(`Processing failed: ${data.error || 'Unknown error'}`);
-        speak("Audio processing failed");
-        setListening(false);
+        if (!continuousMode) {
+          setError(`Processing failed: ${data.error || 'Unknown error'}`);
+          speak("Audio processing failed");
+          setListening(false);
+        }
         return;
       }
 
@@ -304,18 +417,24 @@ const TicTacToe = () => {
         console.log('Transcription:', data.transcription);
         handleVoiceCommand(data.transcription.toLowerCase().trim());
       } else {
-        setError('No transcription received');
-        speak("No transcription received");
+        if (!continuousMode) {
+          setError('No transcription received');
+          speak("No transcription received");
+        }
       }
 
-      // Ready for next command
-      setListening(false);
+      // Ready for next command (if not in continuous mode)
+      if (!continuousMode) {
+        setListening(false);
+      }
 
     } catch (error) {
       console.error('Error sending audio to API:', error);
-      setError(`API Error: ${error.message}`);
-      speak("Error processing audio");
-      setListening(false);
+      if (!continuousMode) {
+        setError(`API Error: ${error.message}`);
+        speak("Error processing audio");
+        setListening(false);
+      }
     }
   };
 
@@ -386,6 +505,15 @@ const TicTacToe = () => {
     speak("New game started. It's X's turn");
   };
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
   return (
     <div style={{ textAlign: 'center', fontFamily: 'Arial' }}>
       <h1>Tic Tac Toe with Voice Control</h1>
@@ -395,22 +523,58 @@ const TicTacToe = () => {
       {winner === 'draw' && <h2>It's a draw!</h2>}
 
       <div style={{ marginBottom: '20px' }}>
-        <button
-          onClick={startListening}
-          disabled={listening}
-          style={{
-            padding: '10px 20px',
-            fontSize: '16px',
-            backgroundColor: listening ? '#cccccc' : '#4CAF50',
-            color: 'white',
-            border: 'none',
-            borderRadius: '5px',
-            cursor: listening ? 'not-allowed' : 'pointer',
-            marginRight: '10px'
-          }}
-        >
-          {isRecording ? 'Recording...' : 'Record Command'}
-        </button>
+        {!continuousMode ? (
+          <>
+            <button
+              onClick={startContinuousListening}
+              style={{
+                padding: '10px 20px',
+                fontSize: '16px',
+                backgroundColor: '#4CAF50',
+                color: 'white',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: 'pointer',
+                marginRight: '10px'
+              }}
+            >
+              Start Continuous Listening
+            </button>
+
+            <button
+              onClick={startListening}
+              disabled={listening}
+              style={{
+                padding: '10px 20px',
+                fontSize: '16px',
+                backgroundColor: listening ? '#cccccc' : '#2196F3',
+                color: 'white',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: listening ? 'not-allowed' : 'pointer',
+                marginRight: '10px'
+              }}
+            >
+              {isRecording ? 'Recording...' : 'Single Command'}
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={stopContinuousListening}
+            style={{
+              padding: '10px 20px',
+              fontSize: '16px',
+              backgroundColor: '#f44336',
+              color: 'white',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              marginRight: '10px'
+            }}
+          >
+             Stop Continuous Listening
+          </button>
+        )}
 
         <button
           onClick={reset}
@@ -428,7 +592,13 @@ const TicTacToe = () => {
         </button>
       </div>
 
-      {listening && (
+      {continuousMode && (
+        <p style={{ color: '#4CAF50', fontWeight: 'bold' }}>
+          🎤 ALWAYS LISTENING - {isRecording ? 'Recording...' : 'Processing...'}
+        </p>
+      )}
+
+      {listening && !continuousMode && (
         <p style={{ color: 'red' }}>
           🎤 {isRecording ? 'Recording... (3 seconds)' : 'Processing...'}
         </p>
@@ -514,6 +684,7 @@ const TicTacToe = () => {
                            log.type === 'RESPONSE' ? '#28a745' :
                            log.type === 'COMMAND' ? '#6f42c1' :
                            log.type === 'ACTION' ? '#fd7e14' :
+                           log.type === 'SYSTEM' ? '#17a2b8' :
                            log.type === 'ERROR' ? '#dc3545' : '#6c757d'
                   }}>
                     {log.type}
@@ -540,7 +711,8 @@ const TicTacToe = () => {
       <div style={{ marginTop: '20px', fontSize: '14px', color: '#666' }}>
         <p>Voice Commands:</p>
         <p>"top left", "center", "bottom right", "new game"</p>
-        <p style={{ fontSize: '12px', marginTop: '10px' }}>
+        <p style={{ fontSize: '12px', marginTop: '10px', fontStyle: 'italic' }}>
+          Continuous mode: Always listening - just speak your commands!
         </p>
       </div>
     </div>
