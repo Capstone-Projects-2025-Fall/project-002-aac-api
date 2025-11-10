@@ -144,6 +144,11 @@ const config = {
             activeBaseRegex: `/tutorial/`,
           },
           {
+            to: '/tic-tac-toe',
+            label: 'Tic-Tac-Toe',
+            position: 'left',
+          },
+          {
             href: 'https://github.com/'+process.env.ORG_NAME+'/'+process.env.PROJECT_NAME,
             label: 'GitHub',
             position: 'right',
