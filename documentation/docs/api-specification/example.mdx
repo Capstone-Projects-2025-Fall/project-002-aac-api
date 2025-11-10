@@ -2,38 +2,13 @@
 sidebar_position: 4
 sidebar_label: TicTacToe
 ---
-import Game from "@site/src/components/BasicTic/App.js";
 import TicTacToe from "@site/src/components/TicTacToe/index.js";
 
 # TicTacToe
 
-## Voice Tic Tac Toe
-
-## Point and Click Tic-Tac-Toe
-
-<Game />
 
 <p>
-```jsx title="/src/components/BasicTic/App.js"
-      const moves = history.map((squares, move) => {
-    let description;
-    if (move > 0) {
-      description = 'Go to move #' + move;
-    } else {
-      description = 'Go to game start';
-    }
-    return (
-      <li key={move}>
-        <button onClick={() => jumpTo(move)}>{description}</button>
-      </li>
-    );
-  });
-```
-</p>
-
-<TicTacToe />
-
-```jsx title="/src/components/TicTacToe/index.js"
+```jsx title="@site/src/components/TicTacToe/index.js"
   const handleClick = (index) => {
     const currentBoard = boardRef.current;
     if (currentBoard[index] || winner) return;
@@ -74,4 +49,26 @@ import TicTacToe from "@site/src/components/TicTacToe/index.js";
       }, 1500);
     }
   };
+```
+</p>
+
+<TicTacToe />
+
+
+```jsx title="@site/src/components/TicTacToe/index.js"
+      const response = await fetch('http://localhost:8080/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      ...
+```
+
+```jsx title="/Initial_API/index.js"
+            res.status(200).send({
+                message: 'Audio processed successfully',
+                transcription: result.trim(),
+                filename: req.file.originalname,
+                size: req.file.size + ' bytes'
+            });
 ```
