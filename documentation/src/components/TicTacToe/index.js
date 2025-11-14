@@ -9,6 +9,9 @@ const TicTacToe = () => {
   const [error, setError] = useState('');
   const [apiLogs, setApiLogs] = useState([]);
   const [continuousMode, setContinuousMode] = useState(false);
+  const [lastConfidenceScore, setLastConfidenceScore] = useState(null);
+  const [lastSelectedApi, setLastSelectedApi] = useState(null);
+  const logCounterRef = useRef(0);
   const playerRef = useRef('X');
   const boardRef = useRef(['', '', '', '', '', '', '', '', '']);
   const mediaRecorderRef = useRef(null);
@@ -31,8 +34,9 @@ const TicTacToe = () => {
   // Add API log entry
   const addApiLog = (type, data) => {
     const timestamp = new Date().toLocaleTimeString();
+    logCounterRef.current += 1; // Increment counter for unique IDs
     const logEntry = {
-      id: Date.now(),
+      id: `log-${Date.now()}-${logCounterRef.current}`, // Ensure unique ID
       timestamp,
       type,
       data: JSON.stringify(data, null, 2)
@@ -391,6 +395,12 @@ const TicTacToe = () => {
       const data = await response.json();
       console.log('API Response:', data);
 
+      // Extract and store confidence score for display
+      if (data.confidenceScore !== null && data.confidenceScore !== undefined) {
+        setLastConfidenceScore(data.confidenceScore);
+        setLastSelectedApi(data.selectedApi || 'unknown');
+      }
+
       // Log API response
       addApiLog('RESPONSE', {
         status: response.status,
@@ -502,6 +512,8 @@ const TicTacToe = () => {
     setWinner('');
     setError('');
     setApiLogs([]); // Clear API logs on reset
+    setLastConfidenceScore(null); // Clear confidence score on reset
+    setLastSelectedApi(null); // Clear selected API on reset
     speak("New game started. It's X's turn");
   };
 
@@ -594,20 +606,48 @@ const TicTacToe = () => {
 
       {continuousMode && (
         <p style={{ color: '#4CAF50', fontWeight: 'bold' }}>
-          🎤 ALWAYS LISTENING - {isRecording ? 'Recording...' : 'Processing...'}
+          ALWAYS LISTENING - {isRecording ? 'Recording...' : 'Processing...'}
         </p>
       )}
 
       {listening && !continuousMode && (
         <p style={{ color: 'red' }}>
-          🎤 {isRecording ? 'Recording... (3 seconds)' : 'Processing...'}
+          {isRecording ? 'Recording... (3 seconds)' : 'Processing...'}
         </p>
       )}
 
       {error && (
         <p style={{ color: 'orange', fontSize: '14px', marginTop: '10px' }}>
-          ⚠️ {error}
+          {error}
         </p>
+      )}
+
+      {/* Confidence Score Display */}
+      {lastConfidenceScore !== null && (
+        <div style={{
+          marginTop: '15px',
+          padding: '10px 20px',
+          backgroundColor: lastConfidenceScore >= 0.7 ? '#d4edda' : lastConfidenceScore >= 0.5 ? '#fff3cd' : '#f8d7da',
+          border: `2px solid ${lastConfidenceScore >= 0.7 ? '#28a745' : lastConfidenceScore >= 0.5 ? '#ffc107' : '#dc3545'}`,
+          borderRadius: '8px',
+          display: 'inline-block',
+          marginBottom: '10px'
+        }}>
+          <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#333', marginBottom: '5px' }}>
+            Confidence Score
+          </div>
+          <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#333' }}>
+            {(lastConfidenceScore * 100).toFixed(1)}%
+          </div>
+          {lastSelectedApi && (
+            <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
+              API: {lastSelectedApi}
+            </div>
+          )}
+          <div style={{ fontSize: '11px', color: '#666', marginTop: '3px', fontStyle: 'italic' }}>
+            {lastConfidenceScore >= 0.7 ? 'High confidence' : lastConfidenceScore >= 0.5 ? 'Medium confidence' : 'Low confidence'}
+          </div>
+        </div>
       )}
 
 <div style={{
@@ -654,7 +694,7 @@ const TicTacToe = () => {
         margin: '30px auto'
       }}>
         <h3 style={{ margin: '0 0 15px 0', color: '#333', fontSize: '18px' }}>
-          🔍 API Input/Output Log
+          API Input/Output Log
         </h3>
         
         {apiLogs.length === 0 ? (

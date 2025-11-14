@@ -99,7 +99,7 @@ app.post('/upload', upload.single("audioFile"), async (req, res) => {
     const requestTime = new Date().toISOString();
     const userAgent = req.get('user-agent') || 'Unknown';
     const { browser, device } = parseUserAgent(userAgent);
-    const userId = req.get('x-user-id') || req.body.userId || req.get('x-session-id') || null;
+    const userId = req.get('x-user-id') || (req.body && req.body.userId) || req.get('x-session-id') || null;
     
     if (!req.file) {
         const errorResponse = {
@@ -157,6 +157,7 @@ app.post('/upload', upload.single("audioFile"), async (req, res) => {
 
         python.stderr.on('data', (data) => {
             error += data.toString();
+            console.error('Python stderr:', data.toString());
         });
 
         // Wait for completion
@@ -171,6 +172,11 @@ app.post('/upload', upload.single("audioFile"), async (req, res) => {
             let errorMessage = null;
 
             // Try to parse JSON response from Python
+            let confidenceScore = null;
+            let aggregatedConfidenceScore = null;
+            let selectedApi = null;
+            let apiResults = null;
+            
             try {
                 const trimmedResult = result.trim();
                 if (trimmedResult) {
@@ -181,18 +187,37 @@ app.post('/upload', upload.single("audioFile"), async (req, res) => {
                     format = pythonResult.format || format;
                     sampleRate = pythonResult.sample_rate || null;
                     
+                    // Extract confidence scores and API results
+                    confidenceScore = pythonResult.confidenceScore || null;
+                    aggregatedConfidenceScore = pythonResult.aggregatedConfidenceScore || null;
+                    selectedApi = pythonResult.selectedApi || null;
+                    apiResults = pythonResult.apiResults || null;
+                    
                     if (!success) {
-                        errorCode = pythonResult.error_code || 'PROCESSING_ERROR';
-                        errorMessage = pythonResult.error_message || 'Unknown error';
+                        // Check if there are API results with error information
+                        if (apiResults && apiResults.length > 0 && apiResults[0].error) {
+                            errorCode = apiResults[0].error.code || pythonResult.error_code || 'PROCESSING_ERROR';
+                            errorMessage = apiResults[0].error.message || pythonResult.error_message || error || 'Unknown error';
+                        } else {
+                            errorCode = pythonResult.error_code || 'PROCESSING_ERROR';
+                            errorMessage = pythonResult.error_message || error || 'Unknown error';
+                        }
+                        console.error('Python script error:', errorMessage, 'Raw result:', trimmedResult);
                     }
+                } else if (error) {
+                    // If no result but there's an error, use the error
+                    errorCode = 'PYTHON_ERROR';
+                    errorMessage = error || 'Python script produced no output';
+                    console.error('Python script produced no output. Error:', error);
                 }
             } catch (parseError) {
                 // Fallback: if JSON parsing fails, treat as plain text transcription
+                console.error('Failed to parse Python output:', parseError, 'Raw result:', result, 'Error:', error);
                 transcription = result.trim() || null;
                 success = code === 0 && transcription !== null && transcription !== '';
                 if (!success) {
                     errorCode = 'PARSE_ERROR';
-                    errorMessage = 'Failed to parse Python script output';
+                    errorMessage = `Failed to parse Python script output: ${parseError.message}. Python error: ${error || 'none'}`;
                 }
             }
 
@@ -200,6 +225,12 @@ app.post('/upload', upload.single("audioFile"), async (req, res) => {
             const responseData = {
                 success: success && code === 0,
                 transcription: transcription,
+                
+                // Confidence scores
+                confidenceScore: confidenceScore,
+                aggregatedConfidenceScore: aggregatedConfidenceScore,
+                selectedApi: selectedApi,
+                apiResults: apiResults, // Results from all APIs tried
                 
                 // Audio file metadata
                 audio: {
@@ -236,8 +267,21 @@ app.post('/upload', upload.single("audioFile"), async (req, res) => {
                 logRequest({
                     ...responseData,
                     audioBufferSize: audioBuffer.length,
-                    ipAddress: req.ip || req.connection.remoteAddress
+                    ipAddress: req.ip || req.connection.remoteAddress,
+                    // Log confidence scores for analysis
+                    confidenceMetrics: {
+                        confidenceScore: confidenceScore,
+                        aggregatedConfidenceScore: aggregatedConfidenceScore,
+                        selectedApi: selectedApi,
+                        apiCount: apiResults ? apiResults.length : 0,
+                        successfulApiCount: apiResults ? apiResults.filter(r => r.transcription && !r.error).length : 0
+                    }
                 }, consentGiven);
+            }
+            
+            // Log confidence score to console for monitoring (always, not just with consent)
+            if (confidenceScore !== null) {
+                console.log(`[Confidence Score] Request: ${requestTime}, Score: ${confidenceScore}, API: ${selectedApi || 'none'}, Transcription: ${transcription ? transcription.substring(0, 50) : 'none'}...`);
             }
 
             // Send response

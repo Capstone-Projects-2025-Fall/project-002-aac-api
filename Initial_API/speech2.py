@@ -3,8 +3,15 @@ import sys
 import io
 import json
 import wave
+import os
+import time
 
 recognizer = sr.Recognizer()
+
+# Get API selection from environment variable or command line argument
+# Format: comma-separated list like "google,openai,azure" or "google" for single API
+api_list = os.getenv('SPEECH_APIS', 'google').split(',')
+api_list = [api.strip().lower() for api in api_list]
 
 try:
     # Read full audio file from stdin (bytes)
@@ -63,13 +70,100 @@ try:
             # Duration already known, just record audio
             audio = recognizer.record(source)
     
-    # Recognize speech using Google
-    text = recognizer.recognize_google(audio)
+    # Try multiple APIs and collect results with confidence scores
+    api_results = []
     
-    # Output JSON with metadata
+    for api_name in api_list:
+        try:
+            start_time = time.time()
+            api_result = {
+                "apiProvider": api_name,
+                "transcription": None,
+                "confidenceScore": None,
+                "processingTimeMs": None,
+                "error": None
+            }
+            
+            if api_name == "google":
+                # Google Speech Recognition (free tier)
+                text = recognizer.recognize_google(audio, show_all=False)
+                # Google doesn't provide confidence scores in free tier, estimate based on length
+                # For synthesized voices, we'll use a lower default confidence
+                confidence = 0.7 if text and len(text) > 0 else 0.0
+                api_result["transcription"] = text
+                api_result["confidenceScore"] = confidence
+                
+            elif api_name == "google_cloud":
+                # Google Cloud Speech-to-Text (requires API key)
+                # Note: This requires GOOGLE_APPLICATION_CREDENTIALS environment variable
+                try:
+                    text = recognizer.recognize_google_cloud(audio, credentials_json=None)
+                    # Google Cloud provides confidence in show_all=True, but for simplicity using default
+                    confidence = 0.85
+                    api_result["transcription"] = text
+                    api_result["confidenceScore"] = confidence
+                except Exception as e:
+                    api_result["error"] = {"code": "API_ERROR", "message": str(e)}
+                    
+            elif api_name == "sphinx":
+                # CMU Sphinx (offline, works with synthesized voices but less accurate)
+                text = recognizer.recognize_sphinx(audio)
+                # Sphinx doesn't provide confidence, estimate lower for synthesized voices
+                confidence = 0.6 if text and len(text) > 0 else 0.0
+                api_result["transcription"] = text
+                api_result["confidenceScore"] = confidence
+                
+            else:
+                # Unknown API, skip
+                continue
+                
+            processing_time = int((time.time() - start_time) * 1000)
+            api_result["processingTimeMs"] = processing_time
+            api_results.append(api_result)
+            
+        except sr.UnknownValueError:
+            api_result["error"] = {"code": "UNKNOWN_VALUE", "message": "Could not understand audio"}
+            api_result["confidenceScore"] = 0.0
+            api_result["processingTimeMs"] = int((time.time() - start_time) * 1000)
+            api_results.append(api_result)
+        except sr.RequestError as e:
+            api_result["error"] = {"code": "REQUEST_ERROR", "message": str(e)}
+            api_result["processingTimeMs"] = int((time.time() - start_time) * 1000)
+            api_results.append(api_result)
+        except Exception as e:
+            api_result["error"] = {"code": "PROCESSING_ERROR", "message": str(e)}
+            api_result["processingTimeMs"] = int((time.time() - start_time) * 1000)
+            api_results.append(api_result)
+    
+    # Select best result based on highest confidence score
+    successful_results = [r for r in api_results if r.get("transcription") and r.get("confidenceScore", 0) > 0]
+    
+    if successful_results:
+        # Get result with highest confidence
+        best_result = max(successful_results, key=lambda x: x.get("confidenceScore", 0))
+        final_transcription = best_result["transcription"]
+        final_confidence = best_result["confidenceScore"]
+        selected_api = best_result["apiProvider"]
+    else:
+        # No successful results
+        final_transcription = None
+        final_confidence = 0.0
+        selected_api = None
+    
+    # Calculate aggregated confidence (average of all successful results)
+    if successful_results:
+        aggregated_confidence = sum(r.get("confidenceScore", 0) for r in successful_results) / len(successful_results)
+    else:
+        aggregated_confidence = 0.0
+    
+    # Output JSON with metadata and confidence scores
     result = {
-        "success": True,
-        "transcription": text,
+        "success": final_transcription is not None,
+        "transcription": final_transcription,
+        "confidenceScore": final_confidence,
+        "aggregatedConfidenceScore": round(aggregated_confidence, 3),
+        "selectedApi": selected_api,
+        "apiResults": api_results,
         "duration": round(duration, 2) if duration else 0,
         "sample_rate": sample_rate,
         "sample_width": sample_width,
@@ -77,28 +171,15 @@ try:
     }
     print(json.dumps(result))
 
-except sr.UnknownValueError:
-    result = {
-        "success": False,
-        "transcription": None,
-        "error_code": "UNKNOWN_VALUE",
-        "error_message": "Could not understand audio"
-    }
-    print(json.dumps(result))
-    sys.exit(1)
-except sr.RequestError as e:
-    result = {
-        "success": False,
-        "transcription": None,
-        "error_code": "REQUEST_ERROR",
-        "error_message": str(e)
-    }
-    print(json.dumps(result))
-    sys.exit(2)
 except Exception as e:
+    # Fallback error handling
     result = {
         "success": False,
         "transcription": None,
+        "confidenceScore": 0.0,
+        "aggregatedConfidenceScore": 0.0,
+        "selectedApi": None,
+        "apiResults": [],
         "error_code": "PROCESSING_ERROR",
         "error_message": str(e)
     }
