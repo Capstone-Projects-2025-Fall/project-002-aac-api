@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-
+//the api library constructor
+//name this whatever you want the call the functions using the following syntax
+//yourConstructor.libFunction(required data)
+const api_lib = require('@smith1552/ciccalone')
 const TicTacToe = () => {
   const [board, setBoard] = useState(['', '', '', '', '', '', '', '', '']);
   const [player, setPlayer] = useState('X');
@@ -369,8 +372,8 @@ const TicTacToe = () => {
 
   const sendAudioToAPI = async (audioBlob) => {
     try {
-      const formData = new FormData();
-      formData.append('audioFile', audioBlob, 'recording.wav');
+      //const formData = new FormData();
+      //formData.append('audioFile', audioBlob, 'recording.wav');
 
       console.log('Sending audio to API...', 'Size:', audioBlob.size, 'bytes');
 
@@ -383,12 +386,15 @@ const TicTacToe = () => {
         filename: 'recording.wav'
       });
 
-      const response = await fetch('http://localhost:8080/upload', {
-        method: 'POST',
-        body: formData
-      });
-
-      const data = await response.json();
+      //const response = await fetch('http://localhost:8080/upload', {
+        //method: 'POST',
+        //body: formData
+      //});
+      //library calls
+      const response = await api_lib.sendAudio(audioBlob);
+      //this library function only exists due to the next call to addApiLog
+      //if we could streamline it we would not require this call at all
+      const data = await api_lib.formatData(response)
       console.log('API Response:', data);
 
       // Log API response
