@@ -35,12 +35,11 @@ This document outlines the core functionality and performance expectations for t
 
 ## Non-Functional Requirements
 
-- The API should **process audio files efficiently** with fast response times and for large audio files  
-- It should be **reliable and stable** during real-time audio or symbol exchange.  
-- The system should be **secure**, protecting user and device data from unauthorized access.  
-- The API should be **scalable**, supporting multiple concurrent requests from different applications.  
-- It should be **flexible and extensible**, allowing future updates to handle new AAC devices, symbol systems, or input types.  
-- The system should provide **clear feedback and error handling** to assist both developers and users in understanding API responses.
+- The API should send back a transcription within two seconds of receiving an audio file, internet performance nonwithstanding.
+- It should be **reliable and stable** during real-time audio or symbol exchange. The API will provide live indication to the user of the progress of each interaction: note: feasability of overlay needs evaluated.
+- The system should be **secure**, protecting user and device data from unauthorized access. The API will ask for user consent to log information, and audio files will be temporarily saved and protected with [specific type of ]encryption.
+- The API should be **scalable**, supporting concurrent requests from different applications without adding notable latency.  
+- With the consent of the end users, the API will create logs which allow developers to troubleshoot and improve their implementation.
 
 ---
 
