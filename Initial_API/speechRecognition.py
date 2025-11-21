@@ -4,8 +4,11 @@ import io
 import json
 import wave
 import numpy as np
-from scipy.io import signal
+from scipy import signal
 import audioop
+import os
+import time
+
 
 def preprocess_audio(recognizer, audio):
     """Preprocess audio data for better recognition in AAC context."""
@@ -13,19 +16,18 @@ def preprocess_audio(recognizer, audio):
     # Noise reduction using ambient noise adjustment
     try:
         # Convert to numpy array for processing
-        raw_date = np.frombuffer(audio.frame_data, np.int16)
+        raw_data = np.frombuffer(audio.frame_data, np.int16)
         # Apply filer to remove low frequency noise
         nyquist = audio.sample_rate / 2
         low_cutoff = 100 # Remove frequencies below 100Hz
         normal_cutoff = low_cutoff / nyquist
         b, a = signal.butter(5, normal_cutoff, btype='high', analog=False)
-        filtered_data = signal.filtfilt(b, a, raw_date)
+        filtered_data = signal.filtfilt(b, a, raw_data)
 
         # Convert back to bytes
-        filtered_bytes = filtered_data.astype(np.int16).tobytes()
-    except:
-        pass # If preprocessing fails, use original audio
-    
+        audio.frame_data = filtered_data.astype(np.int16).tobytes()
+    except Exception as e:
+        print(f"Preprocessing failed: {e}", file = sys.stderr)
     return audio
 
 def adjust_ambient_noise(recognizer, source, duration=0.5):
@@ -33,8 +35,8 @@ def adjust_ambient_noise(recognizer, source, duration=0.5):
     try:
         recognizer.adjust_for_ambient_noise(source, duration=min(duration, 1))
     except:
-        # If calibration failes, then use the default energy threshold
-        recognizer.energy_threshold = 300 
+        # If calibration fails, then use the default energy threshold
+        recognizer.energy_threshold = 400
 
 # For AAC devices, reliability is key, so we want to add a fallback service
 def recognize_with_fallback(recognizer, audio, metadata):
@@ -127,6 +129,7 @@ def detect_audio_format(audio_bytes):
 
 def get_wav_metadata(audio_file):
     """Extract metadata from WAV audio file."""
+    metadata = {}
     try:
         with wave.open(audio_file, 'rb') as wf:
             sample_rate = wf.getframerate()
