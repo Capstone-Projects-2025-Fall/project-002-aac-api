@@ -9,6 +9,61 @@ import audioop
 import os
 import time
 
+# Vosk imports
+vosk = None
+vosk_model = "model/vosk-model-small-en-us-0.15"  # Path to Vosk model directory
+
+def load_vosk_model(model_path):
+    """Load Vosk model for offline recognition"""
+    global vosk, vosk_model
+
+    try:
+        import vosk as vosk_module
+        vosk = vosk_module
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Vosk model not found at {model_path}")
+        model = vosk.Model(model_path)
+        return model
+    except ImportError:
+        print("Vosk module not found. Please install it to use offline recognition.", file=sys.stderr)
+        return None
+    except Exception as e:
+        print(f"Failed to load Vosk model: {e}", file=sys.stderr)
+        return None
+
+def recognize_vosk(audio_data, model):
+    """Recognize speech using Vosk offline model"""
+    if vosk is None or model is None:
+        raise RuntimeError("Vosk model is not loaded")
+
+    rec = vosk.KaldiRecognizer(model, audio_data.sample_rate)
+    rec.SetMaxAlternatives(3) # Get up to 3 alternatives for confidence scoring
+    rec.SetWords(True)
+
+    # Process audio in chunks
+    chunk_size = 4000
+    audio_bytes = audio_data.frame_data
+    
+    for i in range(0, len(audio_bytes), chunk_size):
+        chunk = audio_bytes[i:i+chunk_size]
+        if rec.AcceptWaveform(chunk):
+            pass
+
+    # Finalize recognition
+    result = json.loads(rec.FinalResult())
+    text = result.get('text', '')
+
+    # Calculate confidence if available
+    confidence = 0.5
+    if 'alternatives' in result and result['alternatives']:
+        confidence = result['alternatives'][0].get('confidence', 0.5)
+    elif 'result' in result and result['result']:
+        word_confidences = [word.get('conf', 0.5) for word in result['result']]
+        if word_confidences:
+            confidence = sum(word_confidences) / len(word_confidences)
+    
+    return text, confidence, result
+
 
 def preprocess_audio(recognizer, audio):
     """Preprocess audio data for better recognition in AAC context."""
@@ -38,6 +93,31 @@ def adjust_ambient_noise(recognizer, source, duration=0.5):
         # If calibration fails, then use the default energy threshold
         recognizer.energy_threshold = 400
 
+def calculate_confidence(alternatives):
+    """Calculate confidence score from alternatives."""
+    if not alternatives:
+        return 0.5
+    
+    # If we have confidence score from API
+    if isinstance(alternatives, dict) and 'alternative' in alternatives:
+        alt_list = alternatives['alternative']
+        if alt_list and 'confidence' in alt_list[0]:
+            return alt_list[0]['confidence']
+    
+    # Estimate confidence based on length and content
+    if isinstance(alternatives, list) and len(alternatives) > 0:
+        best_alt = alternatives[0]
+        text = best_alt.get('transcript', '') if isinstance(best_alt, dict) else best_alt
+        length = len(text.split())
+        if length >= 10:
+            return 0.9
+        elif length >=5:
+            return 0.7
+        elif length > 0:
+            return 0.6
+    
+    return 0.5
+
 # For AAC devices, reliability is key, so we want to add a fallback service
 def recognize_with_fallback(recognizer, audio, metadata):
     """Try multiple recognition services with fallback."""
@@ -58,18 +138,27 @@ def recognize_with_fallback(recognizer, audio, metadata):
     except sr.RequestError as e:
         error.append({"Service": "Google", "Error": str(e)})
     
-    # If Google fails, try Sphinx (offline)
+    # If Google fails, try Vosk(offline)
     try:
-        text = recognizer.recognize_sphinx(audio)
-        return {
-            "Success": True,
-            "Transcription": text,
-            "Service": "Sphinx-offline",
-            "note": "Used offline recognition as fallback",
-            **metadata
-        }
+        sample_rate = metadata.get('sample_rate', 16000)
+        text, confidence, full_result = recognize_vosk(audio, load_vosk_model(vosk_model))
+
+        if text:
+            result = {
+                "Success": True,
+                "Transcription": text,
+                "Service": "Vosk",
+                "Confidence": confidence,
+                **metadata
+            }
+
+            if 'result' in full_result and full_result['result']:
+                result['Words'] = full_result['result']
+            return result
+        else:
+            error.append({"Service": "Vosk", "Error": "Could not understand audio"})
     except Exception as e:
-        error.append({"Service": "Sphinx", "Error": str(e)})
+        error.append({"Service": "Vosk", "Error": str(e)})
     
     # If there are API keys, we could add more services here
 
@@ -157,6 +246,14 @@ def main():
     recognizer.dynamic_energy_threshold = True
     recognizer.pause_threshold = 0.5
     recognizer.phrase_threshold = 0.3
+    recognizer.non_speaking_duration = 0.3
+
+    # Operation timeout
+    recognizer.operation_timeout = 15  # seconds
+
+    # Preload Vosk model if available
+    if os.environ.get('PRELOAD_VOSK', 'true').lower() == 'true':
+        load_vosk_model(vosk_model)
 
     try:
         # Read audio from stdin
@@ -217,7 +314,7 @@ def main():
             # Add validation warnings if any
             if validation['warnings']:
                 result['Warnings'] = validation['warnings']
-            
+         
             print(json.dumps(result))
             sys.exit(0 if result['Success'] else 1)
     
