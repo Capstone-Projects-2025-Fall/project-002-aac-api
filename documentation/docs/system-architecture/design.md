@@ -19,6 +19,13 @@ The AAC Integration API follows a **client-server architecture** with a **Python
 │   Game Client   │ (Browser/Desktop App)
 │  (JavaScript)   │
 └────────┬────────┘
+         │ library call
+         │
+         ▼
+┌─────────────────┐
+│     library     │ (npm package)
+│  (JavaScript)   │
+└────────┬────────┘
          │ HTTP POST
          │ multipart/form-data
          ▼
@@ -71,13 +78,7 @@ The AAC Integration API follows a **client-server architecture** with a **Python
 **Key Interfaces**:
 ```javascript
 // Request Interface
-POST /upload
-Content-Type: multipart/form-data
-Body: {
-  audioFile: File,
-  userId?: string,
-  loggingConsent?: boolean
-}
+CALL: library.sendAudio(audioFile: multipart/form-data)
 Headers: {
   'x-user-id'?: string,
   'x-session-id'?: string,
