@@ -78,3 +78,16 @@ Python errors:
 ```bash
 pip3 install SpeechRecognition
 ```
+Implementing the Library:
+```bash
+npm install @smith1552/ciccalone
+
+In your code create a constructor as follows:
+const api_lib = require('@smith1552/ciccalone')
+
+Use the constructor as follows:
+const response = await api_lib.sendAudio(yourAudioFile)
+
+To format the data for logging purposes:
+const data = await api_lib.formatData(response)
+```
