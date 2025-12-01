@@ -11,21 +11,30 @@ import time
 
 # Vosk imports
 vosk = None
-vosk_model = "model/vosk-model-small-en-us-0.15"  # Path to Vosk model directory
+VOSK_MODEL = None  # Store loaded model globally
+vosk_model_path = "model/vosk-model-small-en-us-0.15"  # Path to Vosk model directory
 
 def load_vosk_model(model_path):
     """Load Vosk model for offline recognition"""
-    global vosk, vosk_model
+    global vosk, VOSK_MODEL
+
+    # Return cached model if already loaded
+    if VOSK_MODEL is not None:
+        return VOSK_MODEL
 
     try:
         import vosk as vosk_module
         vosk = vosk_module
         if not os.path.exists(model_path):
-            raise FileNotFoundError(f"Vosk model not found at {model_path}")
-        model = vosk.Model(model_path)
-        return model
+            print(f"Vosk model not found at {model_path}", file=sys.stderr)
+            return None
+        
+        print(f"Loading Vosk model from {model_path}...", file=sys.stderr)
+        VOSK_MODEL = vosk.Model(model_path)
+        print("Vosk model loaded successfully", file=sys.stderr)
+        return VOSK_MODEL
     except ImportError:
-        print("Vosk module not found. Please install it to use offline recognition.", file=sys.stderr)
+        print("Vosk module not found. Install: pip install vosk", file=sys.stderr)
         return None
     except Exception as e:
         print(f"Failed to load Vosk model: {e}", file=sys.stderr)
@@ -37,7 +46,7 @@ def recognize_vosk(audio_data, model):
         raise RuntimeError("Vosk model is not loaded")
 
     rec = vosk.KaldiRecognizer(model, audio_data.sample_rate)
-    rec.SetMaxAlternatives(3) # Get up to 3 alternatives for confidence scoring
+    rec.SetMaxAlternatives(3)  # Get up to 3 alternatives for confidence scoring
     rec.SetWords(True)
 
     # Process audio in chunks
@@ -67,22 +76,31 @@ def recognize_vosk(audio_data, model):
 
 def preprocess_audio(recognizer, audio):
     """Preprocess audio data for better recognition in AAC context."""
-
-    # Noise reduction using ambient noise adjustment
     try:
         # Convert to numpy array for processing
         raw_data = np.frombuffer(audio.frame_data, np.int16)
-        # Apply filer to remove low frequency noise
+        
+        # Apply filter to remove low frequency noise
         nyquist = audio.sample_rate / 2
-        low_cutoff = 100 # Remove frequencies below 100Hz
+        low_cutoff = 100  # Remove frequencies below 100Hz
         normal_cutoff = low_cutoff / nyquist
+        
+        # Check if cutoff is valid
+        if normal_cutoff >= 1.0:
+            print("Warning: Cutoff frequency too high, skipping filter", file=sys.stderr)
+            return audio
+            
         b, a = signal.butter(5, normal_cutoff, btype='high', analog=False)
         filtered_data = signal.filtfilt(b, a, raw_data)
+
+        # Ensure data is in valid range
+        filtered_data = np.clip(filtered_data, -32768, 32767)
 
         # Convert back to bytes
         audio.frame_data = filtered_data.astype(np.int16).tobytes()
     except Exception as e:
-        print(f"Preprocessing failed: {e}", file = sys.stderr)
+        print(f"Preprocessing failed: {e}, using original audio", file=sys.stderr)
+        # Don't modify audio if preprocessing fails
     return audio
 
 def adjust_ambient_noise(recognizer, source, duration=0.5):
@@ -111,22 +129,22 @@ def calculate_confidence(alternatives):
         length = len(text.split())
         if length >= 10:
             return 0.9
-        elif length >=5:
+        elif length >= 5:
             return 0.7
         elif length > 0:
             return 0.6
     
     return 0.5
 
-# For AAC devices, reliability is key, so we want to add a fallback service
 def recognize_with_fallback(recognizer, audio, metadata):
     """Try multiple recognition services with fallback."""
-
-    error = []
+    errors = []
 
     # First, try Google Speech Recognition
     try:
+        print("Trying Google Speech Recognition...", file=sys.stderr)
         text = recognizer.recognize_google(audio, show_all=False)
+        print(f"Google succeeded: {text}", file=sys.stderr)
         return {
             "Success": True,
             "Transcription": text,
@@ -134,16 +152,29 @@ def recognize_with_fallback(recognizer, audio, metadata):
             **metadata
         }
     except sr.UnknownValueError:
-        error.append({"Service": "Google", "Error": "Could not understand audio"})
+        print("Google: Could not understand audio", file=sys.stderr)
+        errors.append({"Service": "Google", "Error": "Could not understand audio"})
     except sr.RequestError as e:
-        error.append({"Service": "Google", "Error": str(e)})
+        print(f"Google RequestError: {e}", file=sys.stderr)
+        errors.append({"Service": "Google", "Error": str(e)})
+    except Exception as e:
+        print(f"Google unexpected error: {type(e).__name__}: {e}", file=sys.stderr)
+        errors.append({"Service": "Google", "Error": str(e)})
     
-    # If Google fails, try Vosk(offline)
+    # If Google fails, try Vosk (offline)
     try:
-        sample_rate = metadata.get('sample_rate', 16000)
-        text, confidence, full_result = recognize_vosk(audio, load_vosk_model(vosk_model))
+        print("Trying Vosk offline recognition...", file=sys.stderr)
+        
+        # Load model (will use cached version if already loaded)
+        model = load_vosk_model(vosk_model_path)
+        
+        if model is None:
+            raise RuntimeError("Vosk model not available")
+        
+        text, confidence, full_result = recognize_vosk(audio, model)
 
         if text:
+            print(f"Vosk succeeded: {text}", file=sys.stderr)
             result = {
                 "Success": True,
                 "Transcription": text,
@@ -156,24 +187,24 @@ def recognize_with_fallback(recognizer, audio, metadata):
                 result['Words'] = full_result['result']
             return result
         else:
-            error.append({"Service": "Vosk", "Error": "Could not understand audio"})
+            print("Vosk: No text recognized", file=sys.stderr)
+            errors.append({"Service": "Vosk", "Error": "Could not understand audio"})
     except Exception as e:
-        error.append({"Service": "Vosk", "Error": str(e)})
+        print(f"Vosk error: {type(e).__name__}: {e}", file=sys.stderr)
+        errors.append({"Service": "Vosk", "Error": str(e)})
     
-    # If there are API keys, we could add more services here
-
     # If all else fails, return errors
+    print("All services failed", file=sys.stderr)
     return {
         "Success": False,
         "Transcription": None,
         "Error_code": "ALL_SERVICES_FAILED",
-        "Error_details": error,
+        "Error_details": errors,
         **metadata
     }
 
 def validate_audio_quality(audio, sample_rate, duration):
     """Validate audio quality for AAC context."""
-    
     issues = []
     warnings = []
 
@@ -187,8 +218,8 @@ def validate_audio_quality(audio, sample_rate, duration):
     
     # Check if audio has any content (not silent)
     try:
-        rms = audioop.rms(audio.frame_data, audio.sample_width)  # width=2 for 16-bit audio
-        if rms < 100: # Very quiet audio
+        rms = audioop.rms(audio.frame_data, audio.sample_width)
+        if rms < 100:  # Very quiet audio
             issues.append("Audio appears to be silent or very quiet")
         elif rms < 500:
             warnings.append("Audio is quite quiet, recognition may be affected")
@@ -226,9 +257,8 @@ def get_wav_metadata(audio_file):
             channels = wf.getnchannels()
             frames = wf.getnframes()
             duration = frames / float(sample_rate)
-            channels = wf.getnchannels()
             metadata = {
-                'duration': round(duration,2),
+                'duration': round(duration, 2),
                 'sample_rate': sample_rate,
                 'sample_width': sample_width,
                 'channels': channels,
@@ -253,7 +283,8 @@ def main():
 
     # Preload Vosk model if available
     if os.environ.get('PRELOAD_VOSK', 'true').lower() == 'true':
-        load_vosk_model(vosk_model)
+        print("Preloading Vosk model...", file=sys.stderr)
+        load_vosk_model(vosk_model_path)
 
     try:
         # Read audio from stdin
@@ -262,8 +293,9 @@ def main():
         if len(audio_bytes) == 0:
             raise ValueError("No audio data received")
 
-        # detect format
+        # Detect format
         audio_format = detect_audio_format(audio_bytes)
+        print(f"Detected audio format: {audio_format}", file=sys.stderr)
 
         # Get audio metadata
         metadata = {}
@@ -272,10 +304,11 @@ def main():
         if audio_format == 'WAV':
             metadata = get_wav_metadata(audio_file)
             audio_file.seek(0)  # Reset to beginning
+            print(f"Audio metadata: {metadata}", file=sys.stderr)
         
         # Load audio for recognition
         with sr.AudioFile(audio_file) as source:
-            # Calibarate for ambient noise
+            # Calibrate for ambient noise
             if metadata.get('duration', 0) > 0:
                 adjust_ambient_noise(recognizer, source, duration=min(metadata['duration'], 0.5))
 
@@ -319,6 +352,7 @@ def main():
             sys.exit(0 if result['Success'] else 1)
     
     except Exception as e:
+        print(f"Exception in main: {type(e).__name__}: {e}", file=sys.stderr)
         result = {
             "Success": False,
             "Transcription": None,
