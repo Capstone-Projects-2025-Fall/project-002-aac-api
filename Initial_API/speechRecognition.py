@@ -29,7 +29,7 @@ from typing import Optional, Dict, List, Any, Tuple
 # Vosk imports
 vosk = None
 VOSK_MODEL = None  # Store loaded model globally
-vosk_model_path = os.environ.get('VOSK_MODEL_PATH', 'model/vosk-model-small-en-us-0.15')
+vosk_model_path = os.environ.get('VOSK_MODEL_PATH', 'model/vosk-model-small-en-us-0.15') # Path to Vosk model
 
 # =============================================================================
 # AAC Command Configuration
