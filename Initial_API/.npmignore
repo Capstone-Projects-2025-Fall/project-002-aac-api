@@ -1,0 +1,36 @@
+# Test files
+__tests__/
+coverage/
+*.test.js
+
+# Logs
+logs/
+*.log
+
+# Dependencies
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation (keep README.md)
+documentation/
+
+# Other project files
+../documentation/
+../DEPLOYMENT_GUIDE.md
+../JIRA_STORIES.md
+../RELEASE_NOTES.md
+../PR_DESCRIPTION.md
+
