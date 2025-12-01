@@ -5,12 +5,22 @@ import json
 import wave
 import os
 import time
+import tempfile
 
 recognizer = sr.Recognizer()
 
+# Try to import Whisper (optional, for robotic voices)
+try:
+    import whisper
+    WHISPER_AVAILABLE = True
+except ImportError:
+    WHISPER_AVAILABLE = False
+
 # Get API selection from environment variable or command line argument
-# Format: comma-separated list like "google,openai,azure" or "google" for single API
-api_list = os.getenv('SPEECH_APIS', 'google').split(',')
+# Format: comma-separated list like "whisper,google,sphinx" or "google" for single API
+# Default: Use all available APIs and pick the best result
+default_apis = 'whisper,google,sphinx' if WHISPER_AVAILABLE else 'google,sphinx'
+api_list = os.getenv('SPEECH_APIS', default_apis).split(',')
 api_list = [api.strip().lower() for api in api_list]
 
 try:
@@ -112,6 +122,46 @@ try:
                 confidence = 0.6 if text and len(text) > 0 else 0.0
                 api_result["transcription"] = text
                 api_result["confidenceScore"] = confidence
+                
+            elif api_name == "whisper":
+                # OpenAI Whisper (excellent for synthesized/robotic voices)
+                if not WHISPER_AVAILABLE:
+                    api_result["error"] = {"code": "API_UNAVAILABLE", "message": "Whisper not installed. Install with: pip3 install openai-whisper"}
+                else:
+                    # Save audio to temporary file for Whisper
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp_file:
+                        tmp_path = tmp_file.name
+                        # Write audio bytes to temp file
+                        tmp_file.write(audio_bytes)
+                    
+                    try:
+                        # Load Whisper model (base model, good balance of speed/accuracy)
+                        # First run will download the model (~150MB)
+                        model = whisper.load_model("base")
+                        
+                        # Transcribe audio
+                        result = model.transcribe(tmp_path)
+                        text = result["text"].strip()
+                        
+                        # Whisper provides confidence scores per segment
+                        # Use average confidence if available, otherwise estimate
+                        if "segments" in result and len(result["segments"]) > 0:
+                            confidences = [seg.get("no_speech_prob", 0) for seg in result["segments"]]
+                            # Convert no_speech_prob to confidence (lower no_speech = higher confidence)
+                            avg_no_speech = sum(confidences) / len(confidences) if confidences else 0.5
+                            confidence = max(0.0, min(1.0, 1.0 - avg_no_speech))
+                        else:
+                            # Estimate confidence based on text length
+                            confidence = 0.85 if text and len(text) > 0 else 0.0
+                        
+                        api_result["transcription"] = text
+                        api_result["confidenceScore"] = round(confidence, 3)
+                    finally:
+                        # Clean up temp file
+                        try:
+                            os.unlink(tmp_path)
+                        except:
+                            pass
                 
             else:
                 # Unknown API, skip

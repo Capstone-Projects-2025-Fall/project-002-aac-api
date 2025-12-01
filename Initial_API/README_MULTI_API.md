@@ -2,11 +2,16 @@
 
 ## Overview
 
-The API now supports multiple speech recognition providers with confidence scoring. This helps improve accuracy, especially for synthesized voices from AAC boards.
+The API now supports multiple speech recognition providers with confidence scoring. **By default, it uses all available APIs (Whisper, Google, Sphinx) and automatically selects the best result** based on confidence scores. This helps improve accuracy, especially for synthesized voices from AAC boards.
 
-## Current API: Google Speech Recognition
+## Default Behavior
 
-You're currently using **Google Speech Recognition** (free tier) via the Python `speech_recognition` library. This doesn't work well with synthesized voices.
+**The system automatically tries all available APIs and picks the best result:**
+- **Whisper** - Best for robotic/synthesized voices (offline, high accuracy)
+- **Google** - Good for natural speech (online, free tier)
+- **Sphinx** - Offline fallback (works with synthesized voices)
+
+The API with the highest confidence score is selected automatically.
 
 ## New Features
 
@@ -32,14 +37,14 @@ You're currently using **Google Speech Recognition** (free tier) via the Python 
 Set which APIs to use via the `SPEECH_APIS` environment variable:
 
 ```bash
-# Use only Google (default)
-export SPEECH_APIS=google
+# Default: Use all APIs (whisper,google,sphinx) and pick the best result
+# No environment variable needed - automatically uses all available APIs
 
-# Use Google and Sphinx (offline, better for synthesized voices)
-export SPEECH_APIS=google,sphinx
-
-# Use only Sphinx (offline, no internet required)
-export SPEECH_APIS=sphinx
+# Or specify which APIs to use:
+export SPEECH_APIS=whisper,google,sphinx  # All three (recommended)
+export SPEECH_APIS=whisper,google         # Whisper + Google fallback
+export SPEECH_APIS=whisper               # Only Whisper (best for robotic voices)
+export SPEECH_APIS=google                # Only Google (original default)
 ```
 
 ### Available APIs
@@ -50,14 +55,23 @@ export SPEECH_APIS=sphinx
    - Requires internet connection
    - Default confidence: 0.7
 
-2. **`sphinx`** - CMU Sphinx (offline)
+2. **`whisper`** - OpenAI Whisper (RECOMMENDED for robotic/synthesized voices) ⭐
+   - Excellent accuracy with synthesized/robotic voices
    - Works offline (no internet needed)
-   - Better with synthesized/robotic voices
-   - Less accurate overall
-   - Default confidence: 0.6
-   - Install: `pip3 install pocketsphinx`
+   - High accuracy overall
+   - Provides confidence scores
+   - Default confidence: 0.85
+   - Install: `pip3 install openai-whisper` (requires Python 3.11+ with dev headers)
+   - First run downloads model (~150MB)
 
-3. **`google_cloud`** - Google Cloud Speech-to-Text (paid)
+3. **`sphinx`** - CMU Sphinx (offline)
+   - Works offline (no internet needed)
+   - Better with synthesized/robotic voices than Google
+   - Less accurate overall than Whisper
+   - Default confidence: 0.6
+   - Install: `pip3 install pocketsphinx` (requires compilation)
+
+4. **`google_cloud`** - Google Cloud Speech-to-Text (paid)
    - Requires API key and credentials
    - Better accuracy than free tier
    - Provides actual confidence scores
@@ -134,14 +148,22 @@ With user consent, detailed metrics are saved to `logs/requests-YYYY-MM-DD.json`
 
 To test with AAC board synthesized voices:
 
-1. **Install Sphinx** (better for synthesized voices):
+1. **Install Whisper** (RECOMMENDED - best for synthesized voices):
    ```bash
-   pip3 install pocketsphinx
+   # Using Homebrew Python (recommended on macOS)
+   /opt/homebrew/bin/pip3.11 install openai-whisper
+   
+   # Or using system Python (if you have dev headers)
+   pip3 install openai-whisper
    ```
 
 2. **Set environment variable**:
    ```bash
-   export SPEECH_APIS=google,sphinx
+   # Use Whisper (best for robotic voices)
+   export SPEECH_APIS=whisper
+   
+   # Or try multiple APIs and let it pick the best
+   export SPEECH_APIS=whisper,google
    ```
 
 3. **Start the API**:
@@ -166,10 +188,11 @@ To add better APIs for synthesized voices (like OpenAI Whisper, Azure, etc.), yo
 
 ### Recommended APIs for Synthesized Voices
 
-1. **OpenAI Whisper** - Excellent with synthesized voices
+1. **OpenAI Whisper** - Excellent with synthesized voices ✅ NOW SUPPORTED
    - Install: `pip3 install openai-whisper`
-   - Requires: OpenAI API key
-   - Provides: High accuracy, confidence scores
+   - Requires: Python 3.11+ with development headers (install via Homebrew on macOS)
+   - Provides: High accuracy, confidence scores, works offline
+   - Usage: Set `SPEECH_APIS=whisper` in environment variable
 
 2. **Azure Speech Services** - Good with various voice types
    - Install: `pip3 install azure-cognitiveservices-speech`
@@ -186,9 +209,10 @@ To add better APIs for synthesized voices (like OpenAI Whisper, Azure, etc.), yo
 ### Low Confidence Scores
 
 If you're getting low confidence scores (< 0.5):
-- Try using `sphinx` API (better for synthesized voices)
+- Try using `whisper` API (best for synthesized/robotic voices) - **RECOMMENDED**
+- Try using `sphinx` API (better for synthesized voices than Google)
 - Check audio quality (sample rate, clarity)
-- Consider using paid APIs (OpenAI Whisper, Azure)
+- Consider using paid APIs (Azure, Google Cloud)
 
 ### API Not Working
 
@@ -200,9 +224,13 @@ If you're getting low confidence scores (< 0.5):
 ## Example Usage
 
 ```bash
-# Start API with multiple APIs
+# Start API with Whisper (best for robotic voices)
 cd Initial_API
-export SPEECH_APIS=google,sphinx
+export SPEECH_APIS=whisper
+node .
+
+# Or try multiple APIs
+export SPEECH_APIS=whisper,google
 node .
 
 # In another terminal, test with curl

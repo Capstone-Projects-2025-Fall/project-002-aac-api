@@ -138,8 +138,20 @@ app.post('/upload', upload.single("audioFile"), async (req, res) => {
         : 'WAV'; // Default to WAV if unknown
 
     try {
+        // Determine which Python to use (prefer Homebrew Python for better package support)
+        let pythonCmd = "python3";
+        if (process.platform !== "win32") {
+            // Check for Homebrew Python first (better for packages like Whisper)
+            const homebrewPython = "/opt/homebrew/bin/python3.11";
+            if (fs.existsSync(homebrewPython)) {
+                pythonCmd = homebrewPython;
+            }
+        } else {
+            pythonCmd = "python";
+        }
+        
         // Call Python script
-        const python = spawn(process.platform === "win32" ? "python" : "python3", [
+        const python = spawn(pythonCmd, [
             path.join(__dirname, 'speech2.py')
         ]);
 
