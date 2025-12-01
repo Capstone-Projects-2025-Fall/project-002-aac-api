@@ -1,6 +1,6 @@
-# 📋 Jira Stories Completed - AAC API Project
+# Jira Stories Completed - AAC API Project
 
-## 🎯 Project Overview
+## Project Overview
 **Project**: AAC API - Voice-Controlled Tic-Tac-Toe Game  
 **Epic**: Augmentative and Alternative Communication API Development  
 **Sprint**: Capstone Project Fall 2025  
@@ -8,14 +8,14 @@
 
 ---
 
-## ✅ Completed Stories
+## Completed Stories
 
 ### **Story 1: Basic API Infrastructure**
 - **Jira ID**: AAC-001
 - **Title**: Set up Express.js API server with basic endpoints
 - **Story Points**: 5
 - **Priority**: High
-- **Status**: ✅ **COMPLETED**
+- **Status**: **COMPLETED**
 - **Assignee**: Development Team
 - **Sprint**: Sprint 1
 
@@ -49,7 +49,7 @@ Establish the foundation for the AAC API by setting up a robust Express.js serve
 - **Title**: Implement audio upload and speech recognition
 - **Story Points**: 8
 - **Priority**: High
-- **Status**: ✅ **COMPLETED**
+- **Status**: **COMPLETED**
 - **Assignee**: Development Team
 - **Sprint**: Sprint 1
 
@@ -83,7 +83,7 @@ Integrate speech recognition capabilities by implementing audio file upload and 
 - **Title**: Create React-based Tic-Tac-Toe with voice controls
 - **Story Points**: 13
 - **Priority**: High
-- **Status**: ✅ **COMPLETED**
+- **Status**: **COMPLETED**
 - **Assignee**: Development Team
 - **Sprint**: Sprint 2
 
@@ -120,7 +120,7 @@ Develop a fully functional Tic-Tac-Toe game with voice control capabilities, dem
 - **Title**: Add audio announcements for game actions
 - **Story Points**: 5
 - **Priority**: Medium
-- **Status**: ✅ **COMPLETED**
+- **Status**: **COMPLETED**
 - **Assignee**: Development Team
 - **Sprint**: Sprint 2
 
@@ -154,7 +154,7 @@ Implement text-to-speech functionality to provide audio feedback for all game ac
 - **Title**: Display live API interactions under game board
 - **Story Points**: 8
 - **Priority**: Medium
-- **Status**: ✅ **COMPLETED**
+- **Status**: **COMPLETED**
 - **Assignee**: Development Team
 - **Sprint**: Sprint 3
 
@@ -190,7 +190,7 @@ Create a real-time logging system to display API interactions under the game boa
 - **Title**: Implement unit tests and test coverage
 - **Story Points**: 8
 - **Priority**: High
-- **Status**: ✅ **COMPLETED**
+- **Status**: **COMPLETED**
 - **Assignee**: Development Team
 - **Sprint**: Sprint 3
 
@@ -226,7 +226,7 @@ Develop comprehensive unit tests for the API endpoints and ensure high test cove
 - **Title**: Create Docusaurus documentation site
 - **Story Points**: 5
 - **Priority**: Medium
-- **Status**: ✅ **COMPLETED**
+- **Status**: **COMPLETED**
 - **Assignee**: Development Team
 - **Sprint**: Sprint 3
 
@@ -263,7 +263,7 @@ Develop a comprehensive documentation site using Docusaurus to provide user guid
 - **Title**: Implement robust error handling
 - **Story Points**: 5
 - **Priority**: High
-- **Status**: ✅ **COMPLETED**
+- **Status**: **COMPLETED**
 - **Assignee**: Development Team
 - **Sprint**: Sprint 3
 
@@ -294,30 +294,30 @@ Implement comprehensive error handling for all edge cases, ensuring the applicat
 
 ---
 
-## 📊 Sprint Summary
+## Sprint Summary
 
 ### **Sprint 1** (Foundation)
-- ✅ AAC-001: Basic API Infrastructure
-- ✅ AAC-002: Speech-to-Text Integration
+- AAC-001: Basic API Infrastructure
+- AAC-002: Speech-to-Text Integration
 - **Velocity**: 13 story points
 
 ### **Sprint 2** (Core Features)
-- ✅ AAC-003: Voice-Controlled Tic-Tac-Toe Game
-- ✅ AAC-004: Text-to-Speech Integration
+- AAC-003: Voice-Controlled Tic-Tac-Toe Game
+- AAC-004: Text-to-Speech Integration
 - **Velocity**: 18 story points
 
 ### **Sprint 3** (Enhancement & Testing)
-- ✅ AAC-005: API Input/Output Logging
-- ✅ AAC-006: Comprehensive Testing
-- ✅ AAC-007: Documentation Site
-- ✅ AAC-008: Error Handling & Edge Cases
+- AAC-005: API Input/Output Logging
+- AAC-006: Comprehensive Testing
+- AAC-007: Documentation Site
+- AAC-008: Error Handling & Edge Cases
 - **Velocity**: 26 story points
 
 ### **Total Project Velocity**: 57 story points
 
 ---
 
-## 🎯 Definition of Done
+## Definition of Done
 
 All stories meet the following criteria:
 - [x] **Code Complete**: All acceptance criteria implemented
@@ -329,7 +329,7 @@ All stories meet the following criteria:
 
 ---
 
-## 🚀 Release Notes
+## Release Notes
 
 **Version**: 1.0.0  
 **Release Date**: January 27, 2025  
@@ -355,4 +355,4 @@ All stories meet the following criteria:
 
 ---
 
-**🎉 All 8 Jira stories completed successfully! The AAC API project is ready for production deployment and user testing.**
+**All 8 Jira stories completed successfully! The AAC API project is ready for production deployment and user testing.**

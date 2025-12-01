@@ -1,4 +1,4 @@
-# 🎤 AAC API - Voice Tic-Tac-Toe Game
+# AAC API - Voice Tic-Tac-Toe Game
 
 A simple voice-controlled Tic-Tac-Toe game that uses speech recognition
 

@@ -17,20 +17,20 @@ The Speech to Text component uses the Web Speech API to capture audio from the u
 
 ## How to Use
 
-1. **Start Listening**: Click the "🎤 Start Listening" button to begin speech recognition
+1. **Start Listening**: Click the "Start Listening" button to begin speech recognition
 2. **Speak**: Speak clearly into your microphone
 3. **View Results**: Your speech will appear as text in the transcript area
-4. **Stop Listening**: Click "🛑 Stop Listening" when finished
-5. **Clear**: Use the "🗑️ Clear" button to remove the current transcript
+4. **Stop Listening**: Click "Stop Listening" when finished
+5. **Clear**: Use the "Clear" button to remove the current transcript
 
 ## Browser Support
 
 | Browser | Support | Notes |
 |---------|---------|-------|
-| Chrome | ✅ Full Support | Recommended browser |
-| Microsoft Edge | ✅ Full Support | Good compatibility |
-| Safari | ⚠️ Limited Support | May have restrictions |
-| Firefox | ❌ Not Supported | Web Speech API not available |
+| Chrome | Full Support | Recommended browser |
+| Microsoft Edge | Full Support | Good compatibility |
+| Safari | Limited Support | May have restrictions |
+| Firefox | Not Supported | Web Speech API not available |
 
 ## Technical Implementation
 

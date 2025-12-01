@@ -113,14 +113,14 @@ const SpeechToText = () => {
           onClick={isListening ? stopListening : startListening}
           disabled={!isSupported}
         >
-          {isListening ? '🛑 Stop Listening' : '🎤 Start Listening'}
+          {isListening ? 'Stop Listening' : 'Start Listening'}
         </button>
         
         <button
           className={`${styles.button} ${styles.clearButton}`}
           onClick={clearTranscript}
         >
-          🗑️ Clear
+          Clear
         </button>
       </div>
 
