@@ -106,7 +106,8 @@
         .cell {
             width: 80px;
             height: 80px;
-            background: white !important;
+            background: white;
+            background-color: white;
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -123,13 +124,15 @@
         }
 
         .cell.red {
-            background: #dc3545;
-            box-shadow: inset 0 5px 10px rgba(0, 0, 0, 0.3);
+            background: #dc3545 !important;
+            background-color: #dc3545 !important;
+            box-shadow: inset 0 5px 10px rgba(0, 0, 0, 0.3) !important;
         }
 
         .cell.yellow {
-            background: #ffc107;
-            box-shadow: inset 0 5px 10px rgba(0, 0, 0, 0.3);
+            background: #ffc107 !important;
+            background-color: #ffc107 !important;
+            box-shadow: inset 0 5px 10px rgba(0, 0, 0, 0.3) !important;
         }
 
         .cell.filled {
@@ -311,28 +314,40 @@
     <script>
         const API_URL = 'http://localhost:8080/upload';
         
-        let currentPlayer = 'red'; // 'red' or 'yellow'
-        let board = Array(6).fill(null).map(() => Array(7).fill(null));
+        let currentPlayer = 'red'; // 'red' or 'yellow' - Red always goes first
+        let board = Array(6).fill(null).map(() => Array(7).fill(null)); // 6 rows x 7 columns
         let gameOver = false;
         let isListening = false;
         let mediaRecorder = null;
         let audioChunks = [];
+        
+        console.log('Game initialized - Red player goes first');
 
         // Initialize board
         function initBoard() {
             const boardElement = document.getElementById('board');
+            if (!boardElement) {
+                console.error('Board element not found!');
+                return;
+            }
+            
             boardElement.innerHTML = '';
             
+            // Create cells in row-major order (row 0 to 5, col 0 to 6)
+            // This matches the board array structure
             for (let row = 0; row < 6; row++) {
                 for (let col = 0; col < 7; col++) {
                     const cell = document.createElement('div');
                     cell.className = 'cell';
                     cell.dataset.row = row;
                     cell.dataset.col = col;
+                    cell.style.background = 'white';
                     cell.addEventListener('click', () => handleColumnClick(col));
                     boardElement.appendChild(cell);
                 }
             }
+            
+            console.log('Board initialized with', document.querySelectorAll('.cell').length, 'cells');
         }
 
         // Update current player display
@@ -350,40 +365,104 @@
 
         // Drop chip in column
         function dropChip(col) {
-            if (gameOver) return;
+            if (gameOver) {
+                console.log('Game is over, cannot drop chip');
+                return;
+            }
             
-            // Find the lowest empty cell in the column
+            if (col < 0 || col > 6) {
+                console.error('Invalid column:', col);
+                return;
+            }
+            
+            // Find the lowest empty cell in the column (start from bottom, row 5 is bottom)
+            let targetRow = -1;
             for (let row = 5; row >= 0; row--) {
                 if (board[row][col] === null) {
-                    board[row][col] = currentPlayer;
-                    updateBoard();
-                    
-                    // Check for win
-                    if (checkWin(row, col)) {
-                        gameOver = true;
-                        document.getElementById('status').textContent = `${currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)} wins!`;
-                        document.getElementById('status').className = 'status winner';
-                        highlightWinningCells(row, col);
-                        return;
-                    }
-                    
-                    // Check for draw
-                    if (isBoardFull()) {
-                        gameOver = true;
-                        document.getElementById('status').textContent = "It's a draw!";
-                        document.getElementById('status').className = 'status draw';
-                        return;
-                    }
-                    
-                    // Switch player
-                    currentPlayer = currentPlayer === 'red' ? 'yellow' : 'red';
-                    updatePlayerDisplay();
-                    return;
+                    targetRow = row;
+                    break;
                 }
             }
             
-            // Column is full
-            alert(`Column ${col + 1} is full! Try another column.`);
+            if (targetRow === -1) {
+                // Column is full
+                alert(`Column ${col + 1} is full! Try another column.`);
+                return;
+            }
+            
+            // Place chip in the board with current player's color
+            const playerColor = currentPlayer; // 'red' or 'yellow'
+            board[targetRow][col] = playerColor;
+            console.log(`✅ ${playerColor.toUpperCase()} player dropped chip in column ${col + 1}, row ${targetRow + 1} (bottom row is 6)`);
+            
+            // Animate chip dropping
+            animateChipDrop(targetRow, col, playerColor);
+            
+            // Update board immediately to show the chip
+            updateBoard();
+            
+            // Check for win after a brief delay
+            setTimeout(() => {
+                // Check for win
+                if (checkWin(targetRow, col)) {
+                    gameOver = true;
+                    const winnerColor = playerColor.charAt(0).toUpperCase() + playerColor.slice(1);
+                    document.getElementById('status').textContent = `${winnerColor} wins!`;
+                    document.getElementById('status').className = 'status winner';
+                    highlightWinningCells(targetRow, col);
+                    return;
+                }
+                
+                // Check for draw
+                if (isBoardFull()) {
+                    gameOver = true;
+                    document.getElementById('status').textContent = "It's a draw!";
+                    document.getElementById('status').className = 'status draw';
+                    return;
+                }
+                
+                // Switch player for next turn
+                currentPlayer = currentPlayer === 'red' ? 'yellow' : 'red';
+                updatePlayerDisplay();
+                console.log(`🔄 Switched to ${currentPlayer.toUpperCase()} player's turn`);
+            }, 100);
+        }
+        
+        // Animate chip dropping from top to target position
+        function animateChipDrop(targetRow, col, player) {
+            const cells = document.querySelectorAll('.cell');
+            const targetCell = Array.from(cells).find(cell => 
+                parseInt(cell.dataset.row) === targetRow && 
+                parseInt(cell.dataset.col) === col
+            );
+            
+            if (!targetCell) {
+                console.error('Target cell not found for row', targetRow, 'col', col);
+                return;
+            }
+            
+            // Set the chip color immediately based on player with !important
+            if (player === 'red') {
+                targetCell.classList.add('red', 'filled');
+                targetCell.style.setProperty('background', '#dc3545', 'important');
+                targetCell.style.setProperty('background-color', '#dc3545', 'important');
+                targetCell.style.setProperty('box-shadow', 'inset 0 5px 10px rgba(0, 0, 0, 0.3)', 'important');
+                console.log('Applied RED color to target cell');
+            } else if (player === 'yellow') {
+                targetCell.classList.add('yellow', 'filled');
+                targetCell.style.setProperty('background', '#ffc107', 'important');
+                targetCell.style.setProperty('background-color', '#ffc107', 'important');
+                targetCell.style.setProperty('box-shadow', 'inset 0 5px 10px rgba(0, 0, 0, 0.3)', 'important');
+                console.log('Applied YELLOW color to target cell');
+            }
+            
+            // Visual feedback - pulse animation
+            targetCell.style.transform = 'scale(1.2)';
+            targetCell.style.transition = 'transform 0.2s ease-out';
+            
+            setTimeout(() => {
+                targetCell.style.transform = 'scale(1)';
+            }, 200);
         }
 
         // Update board display
@@ -392,13 +471,39 @@
             cells.forEach(cell => {
                 const row = parseInt(cell.dataset.row);
                 const col = parseInt(cell.dataset.col);
-                const value = board[row][col];
                 
-                cell.className = 'cell';
-                if (value) {
-                    cell.classList.add(value, 'filled');
+                if (row >= 0 && row < 6 && col >= 0 && col < 7) {
+                    const value = board[row][col];
+                    
+                    // Reset cell completely - remove all classes and styles
+                    cell.className = 'cell';
+                    cell.removeAttribute('style');
+                    
+                    // Apply player color if chip is present
+                    if (value === 'red') {
+                        cell.classList.add('red', 'filled');
+                        // Force red color with inline styles
+                        cell.style.setProperty('background', '#dc3545', 'important');
+                        cell.style.setProperty('background-color', '#dc3545', 'important');
+                        cell.style.setProperty('box-shadow', 'inset 0 5px 10px rgba(0, 0, 0, 0.3)', 'important');
+                        console.log(`Applied RED color to cell row ${row + 1}, col ${col + 1}`);
+                    } else if (value === 'yellow') {
+                        cell.classList.add('yellow', 'filled');
+                        // Force yellow color with inline styles
+                        cell.style.setProperty('background', '#ffc107', 'important');
+                        cell.style.setProperty('background-color', '#ffc107', 'important');
+                        cell.style.setProperty('box-shadow', 'inset 0 5px 10px rgba(0, 0, 0, 0.3)', 'important');
+                        console.log(`Applied YELLOW color to cell row ${row + 1}, col ${col + 1}`);
+                    } else {
+                        // Empty cell - white background
+                        cell.style.setProperty('background', 'white', 'important');
+                        cell.style.setProperty('background-color', 'white', 'important');
+                        cell.style.removeProperty('box-shadow');
+                    }
                 }
             });
+            
+            console.log('Board updated. Current player:', currentPlayer);
         }
 
         // Check for win
@@ -499,24 +604,23 @@
                 };
 
                 mediaRecorder.onstop = async () => {
-                    // MediaRecorder creates webm/opus by default, but API accepts various formats
+                    // MediaRecorder creates webm/opus by default, but API needs WAV
                     const mimeType = mediaRecorder.mimeType || 'audio/webm';
                     const audioBlob = new Blob(audioChunks, { type: mimeType });
-                    await transcribeAudio(audioBlob);
-                    stream.getTracks().forEach(track => track.stop());
-                };
-
-                // Try to use a format that works better with the API
-                const options = { mimeType: 'audio/webm;codecs=opus' };
-                if (MediaRecorder.isTypeSupported('audio/webm')) {
-                    mediaRecorder = new MediaRecorder(stream, options);
-                } else {
-                    mediaRecorder = new MediaRecorder(stream);
-                }
-                audioChunks = [];
-                
-                mediaRecorder.ondataavailable = (event) => {
-                    audioChunks.push(event.data);
+                    console.log('Recording stopped, blob type:', mimeType, 'size:', audioBlob.size);
+                    
+                    try {
+                        // Convert to WAV format for the API
+                        console.log('Starting WAV conversion...');
+                        const wavBlob = await convertToWav(audioBlob);
+                        console.log('WAV conversion successful, sending to API...');
+                        await transcribeAudio(wavBlob);
+                    } catch (error) {
+                        console.error('Error in audio processing:', error);
+                        alert(`Error processing audio: ${error.message}. Please try again.`);
+                    } finally {
+                        stream.getTracks().forEach(track => track.stop());
+                    }
                 };
 
                 mediaRecorder.start();
@@ -546,17 +650,105 @@
             listenBtn.classList.remove('recording');
         }
 
+        // Convert audio blob to WAV format
+        async function convertToWav(audioBlob) {
+            console.log('Converting audio blob to WAV, original type:', audioBlob.type, 'size:', audioBlob.size);
+            
+            return new Promise((resolve, reject) => {
+                try {
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const fileReader = new FileReader();
+                    
+                    fileReader.onload = async function(e) {
+                        try {
+                            console.log('Decoding audio data...');
+                            const audioBuffer = await audioContext.decodeAudioData(e.target.result);
+                            console.log('Audio decoded, converting to WAV...', {
+                                sampleRate: audioBuffer.sampleRate,
+                                channels: audioBuffer.numberOfChannels,
+                                duration: audioBuffer.duration
+                            });
+                            
+                            const wav = audioBufferToWav(audioBuffer);
+                            const wavBlob = new Blob([wav], { type: 'audio/wav' });
+                            console.log('WAV conversion complete, size:', wavBlob.size);
+                            resolve(wavBlob);
+                        } catch (error) {
+                            console.error('Error converting audio:', error);
+                            alert(`Audio conversion failed: ${error.message}. The game may not work properly.`);
+                            reject(error);
+                        }
+                    };
+                    
+                    fileReader.onerror = function(error) {
+                        console.error('FileReader error:', error);
+                        reject(new Error('Failed to read audio file'));
+                    };
+                    
+                    fileReader.readAsArrayBuffer(audioBlob);
+                } catch (error) {
+                    console.error('Error setting up conversion:', error);
+                    reject(error);
+                }
+            });
+        }
+
+        // Convert AudioBuffer to WAV format
+        function audioBufferToWav(buffer) {
+            const length = buffer.length;
+            const numberOfChannels = buffer.numberOfChannels;
+            const sampleRate = buffer.sampleRate;
+            const bytesPerSample = 2;
+            const blockAlign = numberOfChannels * bytesPerSample;
+            const byteRate = sampleRate * blockAlign;
+            const dataSize = length * blockAlign;
+            const bufferSize = 44 + dataSize;
+            const arrayBuffer = new ArrayBuffer(bufferSize);
+            const view = new DataView(arrayBuffer);
+            
+            // WAV header
+            const writeString = (offset, string) => {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            };
+            
+            writeString(0, 'RIFF');
+            view.setUint32(4, bufferSize - 8, true);
+            writeString(8, 'WAVE');
+            writeString(12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, numberOfChannels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, byteRate, true);
+            view.setUint16(32, blockAlign, true);
+            view.setUint16(34, 16, true);
+            writeString(36, 'data');
+            view.setUint32(40, dataSize, true);
+            
+            // Convert float samples to 16-bit PCM
+            let offset = 44;
+            for (let i = 0; i < length; i++) {
+                for (let channel = 0; channel < numberOfChannels; channel++) {
+                    const sample = Math.max(-1, Math.min(1, buffer.getChannelData(channel)[i]));
+                    view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+                    offset += 2;
+                }
+            }
+            
+            return arrayBuffer;
+        }
+
         // Transcribe audio using the API
         async function transcribeAudio(audioBlob) {
             try {
-                // Determine file extension based on blob type
-                let extension = 'webm';
-                if (audioBlob.type.includes('wav')) extension = 'wav';
-                else if (audioBlob.type.includes('mp3')) extension = 'mp3';
-                else if (audioBlob.type.includes('ogg')) extension = 'ogg';
+                // Verify blob type
+                console.log('Sending to API - blob type:', audioBlob.type, 'size:', audioBlob.size);
                 
+                // Ensure filename is .wav
                 const formData = new FormData();
-                formData.append('audioFile', audioBlob, `recording.${extension}`);
+                formData.append('audioFile', audioBlob, 'recording.wav');
 
                 const response = await fetch(API_URL, {
                     method: 'POST',

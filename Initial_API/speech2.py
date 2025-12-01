@@ -7,6 +7,13 @@ import os
 import time
 import tempfile
 
+# Try to import pydub for format conversion (optional)
+try:
+    from pydub import AudioSegment
+    PYDUB_AVAILABLE = True
+except ImportError:
+    PYDUB_AVAILABLE = False
+
 recognizer = sr.Recognizer()
 
 # Try to import Whisper (optional, for robotic voices)
@@ -27,7 +34,7 @@ try:
     # Read full audio file from stdin (bytes)
     audio_bytes = sys.stdin.buffer.read()
     
-    # Detect format from file header or use WAV as default
+    # Detect format from file header
     audio_format = "WAV"
     if audio_bytes[:4] == b'RIFF':
         audio_format = "WAV"
@@ -35,6 +42,40 @@ try:
         audio_format = "FLAC"
     elif audio_bytes[:4] == b'FORM':
         audio_format = "AIFF"
+    elif audio_bytes[:4] == b'\x1aE\xdf\xa3':  # WebM/Matroska
+        audio_format = "WEBM"
+    elif audio_bytes[4:8] == b'ftyp' and b'mp4' in audio_bytes[:20]:  # MP4/M4A
+        audio_format = "MP4"
+    
+    # If format is not directly supported, try to convert using pydub
+    if audio_format in ["WEBM", "MP4"] and PYDUB_AVAILABLE:
+        try:
+            # Save to temp file for conversion
+            with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{audio_format.lower()}') as tmp_input:
+                tmp_input.write(audio_bytes)
+                tmp_input_path = tmp_input.name
+            
+            # Convert to WAV using pydub
+            audio_segment = AudioSegment.from_file(tmp_input_path)
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as tmp_output:
+                tmp_output_path = tmp_output.name
+                audio_segment.export(tmp_output_path, format="wav")
+            
+            # Read converted WAV file
+            with open(tmp_output_path, 'rb') as f:
+                audio_bytes = f.read()
+            
+            audio_format = "WAV"
+            
+            # Clean up temp files
+            try:
+                os.unlink(tmp_input_path)
+                os.unlink(tmp_output_path)
+            except:
+                pass
+        except Exception as e:
+            # Conversion failed, will try to proceed with original
+            pass
     
     # Load audio from bytes (handles WAV, FLAC, AIFF, etc.)
     audio_file = io.BytesIO(audio_bytes)
