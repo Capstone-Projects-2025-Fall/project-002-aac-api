@@ -40,7 +40,7 @@ AAC_COMMANDS = [
     # Navigation
     "yes", "no", "help", "back", "next", "previous", "home", "menu", "exit", "stop",
     # Selection
-    "select", "choose", "pick", "open", "close", "cancel", "confirm", "delete",
+    "select", "choose", "pick", "open", "close", "cancel", "confirm", "delete", "this"
     # Communication
     "hello", "goodbye", "thank you", "please", "sorry", "wait", "more", "done",
     # Actions
