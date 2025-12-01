@@ -1,39 +1,42 @@
 /**
- * Author: Kieran Plenn
- * Date: 10/03/2025
- * Description: This is a basic initialization of an API. Instructions were followed from this
- *              video: https://www.youtube.com/watch?v=-MTSQjw5DrM
+ * AAC Board Speech Recognition API
+ * =================================
+ * REST API for speech-to-text optimized for AAC (Augmentative and Alternative Communication) devices.
  * 
- * Note: Key 'bug' fix was to make sure the app.listen() function was not deleted. 
+ * Features:
+ * - Multiple recognition backends with fallback (Google, Vosk offline)
+ * - Command mode for faster AAC command recognition
+ * - Word-level timing information
+ * - Standardized camelCase JSON responses
+ * - Health check endpoint for device connectivity testing
+ * - Consent-based logging
  * 
- * Run: Make sure you're in the Initial_API directory. Enter 'node .' into the terminal to start
- *      the API. Check http://localhost:8080 for success.
+ * Author: Kieran Plenn (original), Andrew Blass (audio upload), Gio (AAC improvements)
  * 
- * Last Edit (10/10/2025): Changed code to allow for unit testing with Jest
- * 
- * Update by Andrew Blass:
- * - added new post function for uploading audio file and recieving back a message
- * - new tests added to confirm responses for when file is and isnt attached to the request
- * - audio processing to translate speech to text still needed
- * 
- * Update:
- * - get and post functions removed because of unnessarity
- * - tests related to those functions also removed
- * - tests for upload function cleaned up
- * 
+ * Run: node . (from this directory)
+ * Test: npm test
  */
 
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
 const app = express();
-const PORT = 8080;
+const PORT = process.env.PORT || 8080;
 const fs = require('fs');
 const { spawn } = require('child_process');
 const path = require('path');
 
+// =============================================================================
+// Configuration
+// =============================================================================
+
 const storage = multer.memoryStorage();
-const upload = multer({ storage });
+const upload = multer({ 
+    storage,
+    limits: {
+        fileSize: 10 * 1024 * 1024, // 10MB max file size
+    }
+});
 
 // Directory for storing logs (with consent)
 const LOG_DIR = path.join(__dirname, 'logs');
@@ -41,7 +44,24 @@ if (!fs.existsSync(LOG_DIR)) {
     fs.mkdirSync(LOG_DIR, { recursive: true });
 }
 
-// Helper function to parse user agent
+// Python script path
+const SPEECH_SCRIPT = path.join(__dirname, 'speechRecognition.py');
+
+// Supported audio formats
+const SUPPORTED_FORMATS = ['WAV', 'MP3', 'FLAC', 'AIFF', 'OGG', 'M4A', 'RAW', 'PCM'];
+
+// Server start time for uptime tracking
+const SERVER_START_TIME = Date.now();
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+/**
+ * Parse user agent string to extract browser and device info
+ * @param {string} userAgent - User agent string
+ * @returns {{browser: string, device: string}}
+ */
 function parseUserAgent(userAgent) {
     if (!userAgent) return { browser: 'Unknown', device: 'Unknown' };
     
@@ -56,7 +76,7 @@ function parseUserAgent(userAgent) {
     else if (ua.includes('edg')) browser = 'Edge';
     else if (ua.includes('opera')) browser = 'Opera';
     
-    // Detect device
+    // Detect device type
     if (ua.includes('mobile') || ua.includes('android') || ua.includes('iphone')) device = 'Mobile';
     else if (ua.includes('tablet') || ua.includes('ipad')) device = 'Tablet';
     else device = 'Desktop';
@@ -64,9 +84,24 @@ function parseUserAgent(userAgent) {
     return { browser, device };
 }
 
-// Helper function to log request data (with consent)
+/**
+ * Detect audio format from filename extension
+ * @param {string} filename - Original filename
+ * @returns {string} Detected format or 'WAV' as default
+ */
+function detectAudioFormat(filename) {
+    if (!filename) return 'WAV';
+    const ext = filename.split('.').pop()?.toUpperCase() || 'WAV';
+    return SUPPORTED_FORMATS.includes(ext) ? ext : 'WAV';
+}
+
+/**
+ * Log request data (only with user consent)
+ * @param {object} data - Data to log
+ * @param {boolean} consentGiven - Whether logging consent was given
+ */
 function logRequest(data, consentGiven) {
-    if (!consentGiven) return; // Only log if consent is given
+    if (!consentGiven) return;
     
     const logFile = path.join(LOG_DIR, `requests-${new Date().toISOString().split('T')[0]}.json`);
     const logEntry = {
@@ -74,7 +109,6 @@ function logRequest(data, consentGiven) {
         ...data
     };
     
-    // Append to log file
     let logs = [];
     if (fs.existsSync(logFile)) {
         try {
@@ -89,204 +123,467 @@ function logRequest(data, consentGiven) {
     fs.writeFileSync(logFile, JSON.stringify(logs, null, 2));
 }
 
-// Middleware to parse JSON
+/**
+ * Build standardized success response (camelCase)
+ * @param {object} params - Response parameters
+ * @returns {object} Formatted response
+ */
+function buildSuccessResponse({ 
+    transcription, 
+    confidence, 
+    service, 
+    processingTimeMs,
+    audio,
+    request,
+    userId,
+    aac,
+    wordTiming,
+    warnings
+}) {
+    const response = {
+        success: true,
+        transcription,
+        confidence,
+        service,
+        processingTimeMs,
+        audio,
+        request,
+        aac
+    };
+
+    // Only include optional fields if they have values
+    if (userId) response.user = { id: userId };
+    if (wordTiming && wordTiming.length > 0) response.wordTiming = wordTiming;
+    if (warnings && warnings.length > 0) response.warnings = warnings;
+
+    return response;
+}
+
+/**
+ * Build standardized error response (camelCase)
+ * @param {object} params - Error parameters
+ * @returns {object} Formatted error response
+ */
+function buildErrorResponse({
+    errorCode,
+    errorMessage,
+    audio,
+    request,
+    userId,
+    processingTimeMs,
+    errorDetails,
+    warnings
+}) {
+    const response = {
+        success: false,
+        transcription: null,
+        processingTimeMs: processingTimeMs || 0,
+        error: {
+            code: errorCode,
+            message: errorMessage
+        },
+        request
+    };
+
+    if (audio) response.audio = audio;
+    if (userId) response.user = { id: userId };
+    if (errorDetails) response.error.details = errorDetails;
+    if (warnings && warnings.length > 0) response.warnings = warnings;
+
+    return response;
+}
+
+/**
+ * Parse Python script JSON output, handling both old and new formats
+ * @param {string} output - Raw stdout from Python script
+ * @returns {object} Parsed result
+ */
+function parsePythonOutput(output) {
+    const trimmed = output.trim();
+    if (!trimmed) return null;
+
+    try {
+        const parsed = JSON.parse(trimmed);
+        
+        // Handle both old (PascalCase) and new (camelCase) formats for backwards compatibility
+        return {
+            success: parsed.success ?? parsed.Success ?? false,
+            transcription: parsed.transcription ?? parsed.Transcription ?? null,
+            confidence: parsed.confidence ?? parsed.Confidence ?? null,
+            service: parsed.service ?? parsed.Service ?? null,
+            processingTimeMs: parsed.processingTimeMs ?? null,
+            duration: parsed.audio?.duration ?? parsed.duration ?? null,
+            sampleRate: parsed.audio?.sampleRate ?? parsed.sample_rate ?? null,
+            format: parsed.audio?.format ?? parsed.format ?? null,
+            channels: parsed.audio?.channels ?? parsed.channels ?? 1,
+            errorCode: parsed.error?.code ?? parsed.Error_code ?? null,
+            errorMessage: parsed.error?.message ?? parsed.Error_message ?? null,
+            errorDetails: parsed.error?.details ?? parsed.Error_details ?? null,
+            warnings: parsed.warnings ?? parsed.Warnings ?? [],
+            aac: parsed.aac ?? null,
+            wordTiming: parsed.wordTiming ?? parsed.Words ?? null
+        };
+    } catch (e) {
+        return null;
+    }
+}
+
+// =============================================================================
+// Middleware
+// =============================================================================
+
 app.use(express.json());
 app.use(cors());
 
+// Request timing middleware
+app.use((req, res, next) => {
+    req.startTime = Date.now();
+    next();
+});
 
+// =============================================================================
+// Routes
+// =============================================================================
+
+/**
+ * Health check endpoint
+ * GET /health
+ * 
+ * Returns server status and model availability for AAC device connectivity testing.
+ */
+app.get('/health', (req, res) => {
+    const uptime = Math.floor((Date.now() - SERVER_START_TIME) / 1000);
+    
+    // Check if Python script exists
+    const scriptExists = fs.existsSync(SPEECH_SCRIPT);
+    
+    res.status(200).json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        uptime: uptime,
+        uptimeFormatted: `${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m ${uptime % 60}s`,
+        version: '2.0.0',
+        services: {
+            speechRecognition: scriptExists,
+            logging: fs.existsSync(LOG_DIR)
+        },
+        supportedFormats: SUPPORTED_FORMATS,
+        endpoints: {
+            health: '/health',
+            upload: '/upload',
+            formats: '/formats'
+        }
+    });
+});
+
+/**
+ * Supported formats endpoint
+ * GET /formats
+ * 
+ * Returns information about supported audio formats and optimal settings.
+ */
+app.get('/formats', (req, res) => {
+    res.status(200).json({
+        supportedFormats: SUPPORTED_FORMATS,
+        optimal: {
+            format: 'WAV',
+            sampleRate: 16000,
+            bitDepth: 16,
+            channels: 1
+        },
+        notes: [
+            'WAV format recommended for lowest latency',
+            '16kHz sample rate optimal for speech recognition',
+            'Mono audio preferred (stereo will be converted)',
+            'Raw PCM supported with x-sample-rate header'
+        ]
+    });
+});
+
+/**
+ * Audio upload and transcription endpoint
+ * POST /upload
+ * 
+ * Accepts audio file and returns transcription with AAC-optimized metadata.
+ * 
+ * Headers:
+ *   x-user-id: Optional user identifier
+ *   x-session-id: Optional session identifier
+ *   x-logging-consent: 'true' to enable server-side logging
+ *   x-command-mode: 'true' to enable AAC command recognition mode
+ *   x-sample-rate: Sample rate for raw PCM audio
+ * 
+ * Body:
+ *   audioFile: Audio file (multipart/form-data)
+ *   commandMode: Boolean to enable command mode (alternative to header)
+ */
 app.post('/upload', upload.single("audioFile"), async (req, res) => {
-    // Capture request metadata even for error cases
-    const requestTime = new Date().toISOString();
+    const requestStartTime = Date.now();
+    const requestTimestamp = new Date().toISOString();
     const userAgent = req.get('user-agent') || 'Unknown';
     const { browser, device } = parseUserAgent(userAgent);
-    const userId = req.get('x-user-id') || req.body.userId || req.get('x-session-id') || null;
+    const userId = req.get('x-user-id') || req.body?.userId || req.get('x-session-id') || null;
     
+    // Check for command mode
+    const commandMode = req.get('x-command-mode') === 'true' || 
+                       req.body?.commandMode === true ||
+                       req.body?.commandMode === 'true';
+
+    // Build request metadata
+    const requestMeta = {
+        timestamp: requestTimestamp,
+        device: device,
+        browser: browser,
+        userAgent: userAgent
+    };
+
+    // Validate file upload
     if (!req.file) {
-        const errorResponse = {
-            success: false,
-            transcription: null,
-            audio: null,
-            request: {
-                timestamp: requestTime,
-                device: device,
-                browser: browser,
-                userAgent: userAgent
-            },
-            user: userId ? { id: userId } : undefined,
-            error: {
-                code: 'NO_FILE',
-                message: 'No audio file uploaded'
-            }
-        };
-        return res.status(418).send(errorResponse);
+        const processingTimeMs = Date.now() - requestStartTime;
+        const errorResponse = buildErrorResponse({
+            errorCode: 'NO_FILE',
+            errorMessage: 'No audio file uploaded',
+            request: requestMeta,
+            userId,
+            processingTimeMs
+        });
+        return res.status(400).json(errorResponse);
     }
 
-    // Check for logging consent (default to true for development/testing)
-    // In production, this should be explicitly set by the client
+    // Check for logging consent
     const consentGiven = req.get('x-logging-consent') === 'true' || 
-                        req.body.loggingConsent === true ||
-                        process.env.NODE_ENV !== 'production'; // Auto-consent in development
+                        req.body?.loggingConsent === true ||
+                        process.env.NODE_ENV !== 'production';
 
     const audioBuffer = req.file.buffer;
-    const filename = req.file.originalname;
+    const filename = req.file.originalname || 'unknown.wav';
     const fileSize = req.file.size;
-    
-    // Detect format from filename extension
-    const fileExtension = filename.split('.').pop()?.toUpperCase() || 'UNKNOWN';
-    const detectedFormat = ['WAV', 'MP3', 'FLAC', 'AIFF', 'OGG', 'M4A'].includes(fileExtension) 
-        ? fileExtension 
-        : 'WAV'; // Default to WAV if unknown
+    const detectedFormat = detectAudioFormat(filename);
+    const mimeType = req.file.mimetype || `audio/${detectedFormat.toLowerCase()}`;
+
+    // Build audio metadata
+    const audioMeta = {
+        filename: filename,
+        size: fileSize,
+        sizeBytes: fileSize,
+        format: detectedFormat,
+        mimeType: mimeType,
+        duration: null,
+        sampleRate: null,
+        channels: null
+    };
 
     try {
-        // Call Python script
-        const python = spawn(process.platform === "win32" ? "python" : "python3", [
-            path.join(__dirname, 'speech2.py')
-        ]);
+        // Build Python command with optional flags
+        const pythonCmd = process.platform === "win32" ? "python" : "python3";
+        const pythonArgs = [SPEECH_SCRIPT];
+        
+        if (commandMode) {
+            pythonArgs.push('--command-mode');
+        }
+
+        // Spawn Python process
+        const python = spawn(pythonCmd, pythonArgs);
 
         // Send audio data to Python script via stdin
         python.stdin.write(audioBuffer);
         python.stdin.end();
 
-        let result = '';
-        let error = '';
+        let stdout = '';
+        let stderr = '';
 
-        // Collect output
         python.stdout.on('data', (data) => {
-            result += data.toString();
+            stdout += data.toString();
         });
 
         python.stderr.on('data', (data) => {
-            error += data.toString();
+            stderr += data.toString();
         });
 
-        // Wait for completion
+        // Handle process completion
         python.on('close', (code) => {
-            let pythonResult = null;
-            let transcription = null;
-            let duration = null;
-            let format = detectedFormat;
-            let sampleRate = null;
-            let success = false;
-            let errorCode = null;
-            let errorMessage = null;
+            const processingTimeMs = Date.now() - requestStartTime;
+            
+            // Parse Python output
+            const pythonResult = parsePythonOutput(stdout);
 
-            // Try to parse JSON response from Python
-            try {
-                const trimmedResult = result.trim();
-                if (trimmedResult) {
-                    pythonResult = JSON.parse(trimmedResult);
-                    success = pythonResult.success === true;
-                    transcription = pythonResult.transcription || null;
-                    duration = pythonResult.duration || null;
-                    format = pythonResult.format || format;
-                    sampleRate = pythonResult.sample_rate || null;
-                    
-                    if (!success) {
-                        errorCode = pythonResult.error_code || 'PROCESSING_ERROR';
-                        errorMessage = pythonResult.error_message || 'Unknown error';
-                    }
+            if (!pythonResult) {
+                // Failed to parse Python output
+                const errorResponse = buildErrorResponse({
+                    errorCode: 'PARSE_ERROR',
+                    errorMessage: 'Failed to parse speech recognition output',
+                    audio: audioMeta,
+                    request: requestMeta,
+                    userId,
+                    processingTimeMs
+                });
+
+                if (consentGiven) {
+                    logRequest({ ...errorResponse, stderr }, consentGiven);
                 }
-            } catch (parseError) {
-                // Fallback: if JSON parsing fails, treat as plain text transcription
-                transcription = result.trim() || null;
-                success = code === 0 && transcription !== null && transcription !== '';
-                if (!success) {
-                    errorCode = 'PARSE_ERROR';
-                    errorMessage = 'Failed to parse Python script output';
-                }
+
+                return res.status(500).json(errorResponse);
             }
 
-            // Build comprehensive response
-            const responseData = {
-                success: success && code === 0,
-                transcription: transcription,
-                
-                // Audio file metadata
-                audio: {
-                    filename: filename,
-                    size: fileSize,
-                    sizeBytes: fileSize,
-                    format: format,
-                    duration: duration, // in seconds
-                    sampleRate: sampleRate,
-                    mimeType: req.file.mimetype || `audio/${format.toLowerCase()}`
-                },
-                
-                // Request metadata
-                request: {
-                    timestamp: requestTime,
-                    device: device,
-                    browser: browser,
-                    userAgent: userAgent
-                },
-                
-                // User identifier (only included if provided)
-                user: userId ? { id: userId } : undefined,
-                
-                // Error information (if any)
-                error: success ? undefined : {
-                    code: errorCode || `PYTHON_EXIT_${code}`,
-                    message: errorMessage || error || 'Audio processing failed',
-                    pythonExitCode: code
-                }
-            };
+            // Update audio metadata from Python result
+            if (pythonResult.duration) audioMeta.duration = pythonResult.duration;
+            if (pythonResult.sampleRate) audioMeta.sampleRate = pythonResult.sampleRate;
+            if (pythonResult.format) audioMeta.format = pythonResult.format;
+            if (pythonResult.channels) audioMeta.channels = pythonResult.channels;
 
-            // Log request server-side (with consent)
+            if (pythonResult.success && code === 0) {
+                // Success response
+                const successResponse = buildSuccessResponse({
+                    transcription: pythonResult.transcription,
+                    confidence: pythonResult.confidence,
+                    service: pythonResult.service,
+                    processingTimeMs: pythonResult.processingTimeMs || processingTimeMs,
+                    audio: audioMeta,
+                    request: requestMeta,
+                    userId,
+                    aac: pythonResult.aac || {
+                        commandMode: commandMode,
+                        commandType: null,
+                        isCommand: false
+                    },
+                    wordTiming: pythonResult.wordTiming,
+                    warnings: pythonResult.warnings
+                });
+
+                if (consentGiven) {
+                    logRequest(successResponse, consentGiven);
+                }
+
+                return res.status(200).json(successResponse);
+            } else {
+                // Error response from Python
+                const errorResponse = buildErrorResponse({
+                    errorCode: pythonResult.errorCode || `PYTHON_EXIT_${code}`,
+                    errorMessage: pythonResult.errorMessage || stderr || 'Audio processing failed',
+                    audio: audioMeta,
+                    request: requestMeta,
+                    userId,
+                    processingTimeMs: pythonResult.processingTimeMs || processingTimeMs,
+                    errorDetails: pythonResult.errorDetails,
+                    warnings: pythonResult.warnings
+                });
+
+                if (consentGiven) {
+                    logRequest(errorResponse, consentGiven);
+                }
+
+                // Use 422 for processing errors, 500 for system errors
+                const statusCode = pythonResult.errorCode ? 422 : 500;
+                return res.status(statusCode).json(errorResponse);
+            }
+        });
+
+        // Handle Python process errors
+        python.on('error', (err) => {
+            const processingTimeMs = Date.now() - requestStartTime;
+            const errorResponse = buildErrorResponse({
+                errorCode: 'PROCESS_ERROR',
+                errorMessage: `Failed to start speech recognition: ${err.message}`,
+                audio: audioMeta,
+                request: requestMeta,
+                userId,
+                processingTimeMs
+            });
+
             if (consentGiven) {
-                logRequest({
-                    ...responseData,
-                    audioBufferSize: audioBuffer.length,
-                    ipAddress: req.ip || req.connection.remoteAddress
-                }, consentGiven);
+                logRequest(errorResponse, consentGiven);
             }
 
-            // Send response
-            if (code !== 0 || !success) {
-                return res.status(300).send(responseData);
-            }
-
-            res.status(200).send(responseData);
+            return res.status(500).json(errorResponse);
         });
 
     } catch (error) {
-        const errorResponse = {
-            success: false,
-            transcription: null,
-            audio: {
-                filename: filename,
-                size: fileSize,
-                sizeBytes: fileSize,
-                format: detectedFormat
-            },
-            request: {
-                timestamp: requestTime,
-                device: device,
-                browser: browser,
-                userAgent: userAgent
-            },
-            user: userId ? { id: userId } : undefined,
-            error: {
-                code: 'SERVER_ERROR',
-                message: error.message
-            }
-        };
+        const processingTimeMs = Date.now() - requestStartTime;
+        const errorResponse = buildErrorResponse({
+            errorCode: 'SERVER_ERROR',
+            errorMessage: error.message,
+            audio: audioMeta,
+            request: requestMeta,
+            userId,
+            processingTimeMs
+        });
 
-        // Log error (with consent)
         if (consentGiven) {
-            logRequest({
-                ...errorResponse,
-                audioBufferSize: audioBuffer ? audioBuffer.length : 0,
-                ipAddress: req.ip || req.connection.remoteAddress
-            }, consentGiven);
+            logRequest(errorResponse, consentGiven);
         }
 
-        res.status(500).send(errorResponse);
+        return res.status(500).json(errorResponse);
     }
 });
 
-// Only start server if this file is run directly
+/**
+ * 404 handler for unknown routes
+ */
+app.use((req, res) => {
+    res.status(404).json({
+        success: false,
+        error: {
+            code: 'NOT_FOUND',
+            message: `Endpoint ${req.method} ${req.path} not found`
+        },
+        availableEndpoints: {
+            'GET /health': 'Health check and server status',
+            'GET /formats': 'Supported audio formats',
+            'POST /upload': 'Upload audio for transcription'
+        }
+    });
+});
+
+/**
+ * Global error handler
+ */
+app.use((err, req, res, next) => {
+    console.error('Unhandled error:', err);
+    
+    // Handle multer errors
+    if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({
+            success: false,
+            error: {
+                code: 'FILE_TOO_LARGE',
+                message: 'Audio file exceeds maximum size (10MB)'
+            }
+        });
+    }
+
+    res.status(500).json({
+        success: false,
+        error: {
+            code: 'INTERNAL_ERROR',
+            message: 'An unexpected error occurred'
+        }
+    });
+});
+
+// =============================================================================
+// Server Startup
+// =============================================================================
+
 if (require.main === module) {
-    app.listen(PORT, () => console.log(`it's alive on http://localhost:${PORT}`));
+    app.listen(PORT, () => {
+        console.log(`
+╔════════════════════════════════════════════════════════════╗
+║           AAC Speech Recognition API v2.0.0                ║
+╠════════════════════════════════════════════════════════════╣
+║  Server running at: http://localhost:${PORT.toString().padEnd(21)}║
+║                                                            ║
+║  Endpoints:                                                ║
+║    GET  /health   - Health check & status                  ║
+║    GET  /formats  - Supported audio formats                ║
+║    POST /upload   - Upload audio for transcription         ║
+║                                                            ║
+║  Features:                                                 ║
+║    • Command mode: x-command-mode: true                    ║
+║    • Word timing in responses                              ║
+║    • camelCase JSON responses                              ║
+╚════════════════════════════════════════════════════════════╝
+        `);
+    });
 }
 
 // Export app for testing

@@ -45,6 +45,8 @@ AAC_COMMANDS = [
     "hello", "goodbye", "thank you", "please", "sorry", "wait", "more", "done",
     # Actions
     "play", "pause", "repeat", "louder", "quieter", "up", "down", "left", "right", "top"
+    # Game Actions
+    "center", "middle right", "middle left", "bottom right", "bottom center", "bottom left", "top left", "top center", "top right"
 ]
 
 # Command categories for response classification
