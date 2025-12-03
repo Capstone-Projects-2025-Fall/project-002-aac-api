@@ -257,7 +257,7 @@ const TicTacToe = () => {
 
     // Help command
     if (command.includes('help')) {
-      speak("Say a position like top left, center, or bottom right. Or say new game to restart.");
+     // speak("Say a position like top left, center, or bottom right. Or say new game to restart.");
       addApiLog('ACTION', { action: 'help', command });
       return;
     }
@@ -332,7 +332,7 @@ const TicTacToe = () => {
         
         if (!continuousMode) {
           setError(`${errorCode}: ${errorMsg}`);
-          speak("Could not understand audio");
+          // speak("Could not understand audio");
           setListening(false);
         }
         return;
@@ -345,7 +345,7 @@ const TicTacToe = () => {
       } else {
         if (!continuousMode) {
           setError('No transcription received');
-          speak("No transcription received");
+         // speak("No transcription received");
         }
       }
 
@@ -377,7 +377,7 @@ const TicTacToe = () => {
     const healthy = await checkApiHealth();
     if (!healthy) {
       setError('API is not available. Please start the server.');
-      speak("API server is not available");
+      // speak("API server is not available");
       return;
     }
 
@@ -397,7 +397,7 @@ const TicTacToe = () => {
       setContinuousMode(true);
       setListening(true);
 
-      speak("Continuous listening activated");
+      // speak("Continuous listening activated");
       addApiLog('SYSTEM', {
         message: 'Continuous listening started',
         commandMode: commandMode
@@ -408,7 +408,7 @@ const TicTacToe = () => {
     } catch (error) {
       console.error('Error accessing microphone:', error);
       setError('Error accessing microphone');
-      speak("Error accessing microphone");
+      // speak("Error accessing microphone");
     }
   };
 
@@ -476,7 +476,7 @@ const TicTacToe = () => {
       streamRef.current = null;
     }
 
-    speak("Stopped listening");
+    // speak("Stopped listening");
     addApiLog('SYSTEM', { message: 'Continuous listening stopped' });
   };
 
@@ -485,7 +485,7 @@ const TicTacToe = () => {
     const healthy = await checkApiHealth();
     if (!healthy) {
       setError('API is not available. Please start the server.');
-      speak("API server is not available");
+      // speak("API server is not available");
       return;
     }
 
@@ -519,7 +519,7 @@ const TicTacToe = () => {
         } catch (error) {
           console.error('Error processing audio:', error);
           setError('Error processing audio');
-          speak("Error processing audio");
+          // speak("Error processing audio");
           setListening(false);
         }
 
@@ -542,7 +542,7 @@ const TicTacToe = () => {
     } catch (error) {
       console.error('Error accessing microphone:', error);
       setError('Error accessing microphone');
-      speak("Error accessing microphone");
+      // speak("Error accessing microphone");
     }
   };
 
@@ -576,7 +576,7 @@ const TicTacToe = () => {
     boardRef.current = newBoard;
 
     const positionName = getPositionName(index);
-    speak(`${currentPlayer} placed in ${positionName}`);
+    // speak(`${currentPlayer} placed in ${positionName}`);
 
     const gameWinner = checkWinner(newBoard);
     if (gameWinner) {
@@ -603,7 +603,7 @@ const TicTacToe = () => {
     setError('');
     setLastConfidence(null);
     setLastProcessingTime(null);
-    speak("New game. X's turn");
+    // speak("New game. X's turn");
   };
 
   // Cleanup on unmount
@@ -796,7 +796,7 @@ const TicTacToe = () => {
       {/* Status Messages */}
       {continuousMode && (
         <p style={{ color: '#4CAF50', fontWeight: 'bold', fontSize: '18px' }}>
-          🎤 ALWAYS LISTENING - {isRecording ? '🔴 Recording...' : '⏳ Processing...'}
+           ALWAYS LISTENING - {isRecording ? '🔴 Recording...' : '⏳ Processing...'}
         </p>
       )}
 
