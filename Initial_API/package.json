@@ -5,9 +5,20 @@
   "main": "index.js",
   "type": "commonjs",
   "exports": {
-    ".": "./index.js",
+    ".": {
+      "node": "./index.js",
+      "default": "./index.js"
+    },
     "./lib/speechRecognition": "./lib/speechRecognition.js",
-    "./server": "./server.js"
+    "./server": "./server.js",
+    "./browser": {
+      "browser": "./browser.js",
+      "default": "./browser.js"
+    }
+  },
+  "browser": {
+    "./index.js": "./browser.js",
+    "./lib/speechRecognition.js": "./browser.js"
   },
   "scripts": {
     "start": "node index.js",
