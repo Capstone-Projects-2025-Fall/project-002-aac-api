@@ -15,11 +15,38 @@ const fs = require('fs');
  * @param {string} options.speechApis - Comma-separated list of APIs to use (default: whisper,google,sphinx)
  * @returns {Promise<Object>} Transcription result with confidence scores
  */
-function transcribeAudio(audioBuffer, options = {}) {
-    return new Promise((resolve, reject) => {
-        if (!audioBuffer || !Buffer.isBuffer(audioBuffer)) {
-            return reject(new Error('Invalid audio buffer provided'));
+async function transcribeAudio(audioBuffer, options = {}) {
+    // Normalize input types before starting the child process.
+    try {
+        if (!audioBuffer) {
+            throw new Error('Invalid audio buffer provided');
         }
+
+        // Convert ArrayBuffer -> Buffer
+        if (typeof ArrayBuffer !== 'undefined' && audioBuffer instanceof ArrayBuffer) {
+            audioBuffer = Buffer.from(audioBuffer);
+        }
+
+        // Convert TypedArray (Uint8Array etc.) -> Buffer
+        else if (ArrayBuffer.isView && ArrayBuffer.isView(audioBuffer)) {
+            audioBuffer = Buffer.from(audioBuffer.buffer, audioBuffer.byteOffset, audioBuffer.byteLength);
+        }
+
+        // Convert Blob (browser) -> Buffer using arrayBuffer()
+        else if (typeof Blob !== 'undefined' && audioBuffer instanceof Blob) {
+            const ab = await audioBuffer.arrayBuffer();
+            audioBuffer = Buffer.from(ab);
+        }
+
+        // Final check: must be a Buffer now
+        if (!Buffer.isBuffer(audioBuffer)) {
+            throw new Error('Invalid audio buffer provided');
+        }
+    } catch (convErr) {
+        throw new Error(`Failed to normalize audio input: ${convErr.message}`);
+    }
+
+    return new Promise((resolve, reject) => {
 
         // Determine Python path
         let pythonCmd = options.pythonPath;
