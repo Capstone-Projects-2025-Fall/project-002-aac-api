@@ -1,196 +1,434 @@
-# Design Document: Basic API Initialization
+# Design Document: AAC Speech Recognition API
 
-**Description:** This document provides the complete design of a basic Express.js API, including class/module purposes, data fields, methods, pre/post conditions, parameters, and exceptions.
+**Description:**  
+This document provides the complete design for the **AAC Board Speech Recognition API**, including module/class purposes, data fields, methods, routes, pre/post conditions, parameters, exceptions, and helper utilities.
+
+The API is built with **Express.js**, supports audio upload and speech recognition via Python backends, and is optimized for **Augmentative and Alternative Communication (AAC)** devices.
 
 ---
 
 ## Overview
 
-This software initializes a simple RESTful API using **Express.js**. It sets up middleware for JSON parsing, defines test endpoints for GET and POST requests, and runs a local server on port **8080**.
+This software implements a robust speech-to-text REST API with:
+
+- Multiple speech-recognition backends (e.g., Google Speech API, offline Vosk)
+- Command mode for AAC command recognition
+- Word-level timing metadata
+- camelCase JSON responses
+- Health and capability endpoints
+- Consent-based logging of audio metadata
+- Fallback and tolerant JSON parsing of Python output
 
 ### Purpose
 
-* Demonstrate API initialization using Express.js.
-* Provide sample endpoints for testing GET and POST methods.
-* Serve as a foundation for expanding into a full REST API.
+* Provide a reliable speech recognition endpoint for AAC devices.  
+* Expose system health information for device connectivity.  
+* Support multiple audio formats and command modes.  
+* Serve as a modern, extensible foundation for AAC-focused speech recognition systems.
 
 ---
 
 ## Modules and Fields
 
-| Field     | Type   | Purpose                                                                            |
-| --------- | ------ | ---------------------------------------------------------------------------------- |
-| `express` | Module | Imports the Express framework for creating and managing the web server.            |
-| `app`     | Object | Represents the Express application instance; used to define middleware and routes. |
-| `PORT`    | Number | Port number on which the API server listens (set to `8080`).                       |
+| Field | Type | Purpose |
+|-------|------|---------|
+| `express` | Module | Main HTTP framework for routing and middleware. |
+| `multer` | Module | Parses audio uploads via multipart/form-data. |
+| `cors` | Module | Enables cross-origin requests (important for AAC devices). |
+| `fs` | Module | File system access for logs and script validation. |
+| `spawn` | Module | Executes Python speech recognition backend. |
+| `path` | Module | File path resolution. |
+| `app` | Object | Express instance for routes and middleware. |
+| `PORT` | Number | API port (`8080` default, environment override supported). |
+| `upload` | Multer Instance | Memory-based upload handler (10MB limit). |
+| `LOG_DIR` | String | Directory used for daily JSON log files. |
+| `SPEECH_SCRIPT` | String | Path to Python speech recognition script. |
+| `SUPPORTED_FORMATS` | Array<String> | Allowed audio formats. |
+| `SERVER_START_TIME` | Number | Millisecond timestamp for uptime calculations. |
 
 ---
 
 ## Middleware
 
-### **JSON Parser**
+### JSON Parser
 
 ```js
 app.use(express.json());
+````
+
+**Purpose:** Automatically parses incoming JSON request bodies.
+**Pre-condition:** Body must be valid JSON when JSON is expected.
+**Post-condition:** Parsed JSON becomes available via `req.body`.
+
+---
+
+### CORS
+
+```js
+app.use(cors());
 ```
 
-**Purpose:** Enables parsing of incoming JSON request bodies, making them available via `req.body`.
+**Purpose:** Enables cross-origin access from AAC devices (web apps, tablets, mobile apps).
 
-**Pre-condition:** Requests must contain valid JSON.
+---
 
-**Post-condition:** JSON data is accessible to subsequent route handlers.
+### Request Timing Middleware
 
-**Exceptions:** If JSON is malformed, Express automatically returns `400 Bad Request`.
+```js
+app.use((req, res, next) => {
+    req.startTime = Date.now();
+    next();
+});
+```
+
+**Purpose:** Tracks request processing time for diagnostics and response metadata.
+
+---
+
+### File Upload (Multer)
+
+```js
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 }
+});
+```
+
+* Files stored in memory, not on disk.
+* Maximum size: **10MB**.
+* Used only for the `/upload` endpoint.
+
+**Exceptions:**
+
+* `LIMIT_FILE_SIZE` handled by global error handler → returns **413**.
+* Missing file handled manually → returns **400**.
+
+---
+
+## Helper Functions
+
+### parseUserAgent(ua)
+
+Extracts browser + device info for diagnostics.
+
+### detectAudioFormat(filename)
+
+Returns audio format from file extension (default `"WAV"`).
+
+### logRequest(data, consentGiven)
+
+Writes request metadata to a daily JSON log file when allowed.
+
+### buildSuccessResponse(params)
+
+Standard camelCase success response wrapper.
+
+### buildErrorResponse(params)
+
+Standard camelCase error response wrapper.
+
+### parsePythonOutput(stdout)
+
+Parses JSON output from Python script.
+Supports both **camelCase** and old **PascalCase** formats.
 
 ---
 
 ## Server Initialization
 
 ```js
-app.listen(PORT, () => console.log(`it's alive on http://localhost:${PORT}`));
-```
-
-**Purpose:** Starts the Express.js server on the defined port and logs a confirmation message.
-
-**Parameters:**
-
-* `PORT` *(Number)* — Server port.
-* Callback — Logs confirmation to console.
-
-**Pre-condition:** No conflicting process occupies the port.
-
-**Post-condition:** API becomes accessible at `http://localhost:8080`.
-
-**Return Value:** None.
-
-**Exceptions:** If the port is already in use, the system throws `EADDRINUSE`.
-
----
-
-## Routes and Methods
-
-### **GET /test**
-
-```js
-app.get('/test', (req, res) => {
-    res.status(200).send({
-        name: 'Test1',
-        status: 'test'
-    });
+app.listen(PORT, () => {
+    // Styled console startup banner
 });
 ```
 
-**Purpose:** Confirms API availability.
-
-**Method:** GET
-**Endpoint:** `/test`
-
-**Pre-condition:** Server must be running.
-
-**Post-condition:** Client receives success response.
-
-**Response:**
-
-```json
-{
-  "name": "Test1",
-  "status": "test"
-}
-```
-
-**Exceptions:** None expected.
-
----
-
-### **POST /test/:id**
-
-```js
-app.post('/test/:id', (req, res) => {
-    const { id } = req.params;
-    const { info } = req.body;
-
-    if (!info) {
-        res.status(418).send({ message: 'No info!' });
-    }
-
-    res.send({
-        name: `Test message with info: ${info} and ID: ${id}`,
-    });
-});
-```
-
-**Purpose:** Handles POST requests by echoing provided parameters.
-
-**Method:** POST
-**Endpoint:** `/test/:id`
-
-**Parameters:**
-
-* `id` *(String)* — Extracted from URL.
-* `info` *(String)* — Sent in request body.
-* `req` *(Request Object)* — HTTP request object.
-* `res` *(Response Object)* — HTTP response object.
-
-**Pre-condition:**
-
-* Request body must include valid JSON.
-* Must contain field `info`.
-
-**Post-condition:**
-
-* Responds with JSON confirmation if `info` is provided.
-* Sends error message if missing.
-
-**Success Response:**
-
-```json
-{
-  "name": "Test message with info: <info> and ID: <id>"
-}
-```
-
-**Error Response:**
-
-```json
-{
-  "message": "No info!"
-}
-```
-
+**Purpose:** Starts the Express.js server and prints endpoint help.
 **Exceptions:**
 
-* **418 (I'm a teapot):** Missing `info` field.
-* **400 (Bad Request):** Malformed JSON.
+* `EADDRINUSE` if another process occupies the port.
 
 ---
 
-## Error Handling
+# Routes and Methods
 
-* Express automatically handles JSON parsing errors.
-* Custom responses provide user-friendly messages.
-* Future improvement: Add centralized error-handling middleware.
+---
+
+# GET /health
+
+### Purpose
+
+System health, supported formats, uptime, and status of Python backend.
+Designed for AAC device connectivity checks.
+
+### Success Response Example
+
+```json
+{
+  "status": "ok",
+  "timestamp": "2025-01-01T00:00:00Z",
+  "uptime": 1234,
+  "uptimeFormatted": "0h 20m 34s",
+  "version": "2.0.0",
+  "services": {
+    "speechRecognition": true,
+    "logging": true
+  },
+  "supportedFormats": ["WAV","MP3","FLAC","AIFF","OGG","M4A","RAW","PCM"],
+  "endpoints": {
+    "health": "/health",
+    "upload": "/upload",
+    "formats": "/formats"
+  }
+}
+```
+
+**Exceptions:** None.
+
+---
+
+# GET /formats
+
+### Purpose
+
+Returns audio formats supported by the API and recommended settings for lowest latency.
+
+### Success Response
+
+```json
+{
+  "supportedFormats": [...],
+  "optimal": {
+    "format": "WAV",
+    "sampleRate": 16000,
+    "bitDepth": 16,
+    "channels": 1
+  },
+  "notes": [
+    "WAV format recommended for lowest latency",
+    "16kHz sample rate optimal",
+    "Mono audio preferred",
+    "Raw PCM supported with x-sample-rate header"
+  ]
+}
+```
+
+**Exceptions:** None.
+
+---
+
+# POST /upload
+
+### Purpose
+
+Uploads audio for AAC-optimized speech recognition and returns:
+
+* Transcription
+* Confidence values
+* Processing metadata
+* AAC command detection
+* Word timing array
+* User & device metadata
+* Audio metadata
+
+---
+
+### Headers
+
+| Header              | Purpose                            |
+| ------------------- | ---------------------------------- |
+| `x-user-id`         | Optional user ID                   |
+| `x-session-id`      | Fallback ID                        |
+| `x-logging-consent` | `"true"` → enable request logging  |
+| `x-command-mode`    | `"true"` → AAC command recognition |
+| `x-sample-rate`     | For RAW/PCM audio only             |
+
+---
+
+### Form Fields (multipart/form-data)
+
+| Field         | Type   | Required | Description           |
+| ------------- | ------ | -------- | --------------------- |
+| `audioFile`   | File   | ✔        | Audio data            |
+| `commandMode` | Bool   | ✖        | Alternative to header |
+| `userId`      | String | ✖        | Alternative to header |
+
+---
+
+### Successful Response Example
+
+```json
+{
+  "success": true,
+  "transcription": "hello world",
+  "confidence": 0.92,
+  "service": "Google",
+  "processingTimeMs": 320,
+  "audio": {
+    "filename": "speech.wav",
+    "size": 10240,
+    "format": "WAV",
+    "duration": 1.23,
+    "sampleRate": 16000,
+    "channels": 1
+  },
+  "request": {
+    "timestamp": "2025-01-01T00:00:00Z",
+    "device": "Mobile",
+    "browser": "Chrome",
+    "userAgent": "Mozilla/5.0 ..."
+  },
+  "aac": {
+    "commandMode": true,
+    "commandType": "navigation",
+    "isCommand": true
+  },
+  "wordTiming": [
+    { "word": "hello", "start": 0.0, "end": 0.4 },
+    { "word": "world", "start": 0.5, "end": 0.9 }
+  ]
+}
+```
+
+---
+
+### Error Responses
+
+#### No file uploaded (400)
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "NO_FILE",
+    "message": "No audio file uploaded"
+  }
+}
+```
+
+#### Python backend error (422)
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "AUDIO_ERROR",
+    "message": "Could not read audio"
+  }
+}
+```
+
+#### File too large (413)
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "FILE_TOO_LARGE",
+    "message": "Audio file exceeds maximum size (10MB)"
+  }
+}
+```
+
+#### Internal server error (500)
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred"
+  }
+}
+```
+
+---
+
+### Status Codes
+
+| Status  | Meaning                  |
+| ------- | ------------------------ |
+| **200** | Successful recognition   |
+| **400** | Missing/invalid inputs   |
+| **413** | File too large           |
+| **422** | Python-recognition error |
+| **500** | Server/internal failure  |
+
+---
+
+# 404 Handler
+
+### Response
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Endpoint GET /foobar not found"
+  },
+  "availableEndpoints": {
+    "GET /health": "Health check and status",
+    "GET /formats": "Supported audio formats",
+    "POST /upload": "Transcription endpoint"
+  }
+}
+```
+
+---
+
+# Global Error Handler
+
+### Example: File too large
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "FILE_TOO_LARGE",
+    "message": "Audio file exceeds maximum size (10MB)"
+  }
+}
+```
+
+### Example: Unexpected error
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred"
+  }
+}
+```
 
 ---
 
 ## Summary Table
 
-| Method | Endpoint    | Description          | Success Response                                          | Error Response                  |
-| ------ | ----------- | -------------------- | --------------------------------------------------------- | ------------------------------- |
-| GET    | `/test`     | Verifies API status  | `{ name: "Test1", status: "test" }`                       | N/A                             |
-| POST   | `/test/:id` | Echoes provided data | `{ name: "Test message with info: <info> and ID: <id>" }` | `{ message: "No info!" }` (418) |
+| Method | Endpoint   | Description                    | Success Response            | Error Response     |
+| ------ | ---------- | ------------------------------ | --------------------------- | ------------------ |
+| GET    | `/health`  | Returns server status & uptime | Status metadata             | N/A                |
+| GET    | `/formats` | Lists supported audio formats  | Format list                 | N/A                |
+| POST   | `/upload`  | Audio → transcription          | Full transcription response | 400, 413, 422, 500 |
 
 ---
 
 ## Notes
 
-* Followed instructions from: [https://www.youtube.com/watch?v=-MTSQjw5DrM](https://www.youtube.com/watch?v=-MTSQjw5DrM)
-* Ensure `app.listen()` remains in the code; removing it will prevent the API from running.
-* Navigate to the /Initial_API folder from the project's root folder. Then, run by using:
+* Run from this directory with:
 
   ```bash
   node .
   ```
-* Verify at: [http://localhost:8080](http://localhost:8080)
+* Test suite:
+
+  ```bash
+  npm test
+  ```
+* Logging only occurs with consent (`x-logging-consent: true`).
+* Python backend (`speechRecognition.py`) must exist and be executable.
+* Recommended audio settings: **WAV, 16kHz, mono**.
 
 ---
 
