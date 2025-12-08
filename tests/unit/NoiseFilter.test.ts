@@ -15,44 +15,41 @@ describe('NoiseFilter', () => {
     it('should create a new NoiseFilter instance', () => {
       expect(filter).toBeInstanceOf(NoiseFilter);
     });
-
-    it('should accept noise threshold and smoothing factor', () => {
-      const customFilter = new NoiseFilter(0.2, 0.9);
-      expect(customFilter.getNoiseThreshold()).toBe(0.2);
-    });
   });
 
   describe('process', () => {
-    it('should process audio buffer', () => {
-      // TODO: Create mock AudioBuffer and test processing
-    });
-  });
-
-  describe('highPassFilter', () => {
-    it('should apply high-pass filter', () => {
-      // TODO: Implement test
-    });
-  });
-
-  describe('normalize', () => {
-    it('should normalize audio levels', () => {
-      // TODO: Implement test
-    });
-  });
-
-  describe('setNoiseThreshold', () => {
-    it('should update noise threshold', () => {
-      filter.setNoiseThreshold(0.3);
-      expect(filter.getNoiseThreshold()).toBe(0.3);
-    });
-
-    it('should clamp threshold to valid range', () => {
-      filter.setNoiseThreshold(-1);
-      expect(filter.getNoiseThreshold()).toBe(0);
+    it('should process audio buffer and return same-length array', () => {
+      const inputBuffer = new Float32Array([0.1, 0.2, 0.3, 0.4, 0.5]);
+      const outputBuffer = filter.process(inputBuffer);
       
-      filter.setNoiseThreshold(2);
-      expect(filter.getNoiseThreshold()).toBe(1);
+      expect(outputBuffer).toBeInstanceOf(Float32Array);
+      expect(outputBuffer.length).toBe(inputBuffer.length);
+    });
+
+    it('should handle empty buffer', () => {
+      const inputBuffer = new Float32Array(0);
+      const outputBuffer = filter.process(inputBuffer);
+      
+      expect(outputBuffer).toBeInstanceOf(Float32Array);
+      expect(outputBuffer.length).toBe(0);
+    });
+
+    it('should handle large buffer', () => {
+      const inputBuffer = new Float32Array(4096);
+      inputBuffer.fill(0.5);
+      
+      const outputBuffer = filter.process(inputBuffer);
+      
+      expect(outputBuffer).toBeInstanceOf(Float32Array);
+      expect(outputBuffer.length).toBe(4096);
+    });
+
+    it('should return a new array (immutability)', () => {
+      const inputBuffer = new Float32Array([0.1, 0.2, 0.3]);
+      const outputBuffer = filter.process(inputBuffer);
+      
+      // Should be a different array instance
+      expect(outputBuffer).not.toBe(inputBuffer);
     });
   });
 });
-

@@ -3,7 +3,7 @@
  * @module middleware/CacheManager
  */
 
-import { AudioEvent, IntentEvent } from '../types';
+import { AudioEvent, IntentEvent, TranscriptEvent } from '../types';
 
 /**
  * Cache entry structure.
@@ -107,7 +107,7 @@ export class CacheManager {
     }
     
     if (event.type === 'transcript' && 'transcript' in event) {
-      return `transcript:${event.transcript.toLowerCase().trim()}`;
+      return `transcript:${(event as TranscriptEvent).transcript.toLowerCase().trim()}`;
     }
 
     return `event:${event.type}:${Date.now()}`;

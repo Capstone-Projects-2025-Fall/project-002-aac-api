@@ -43,9 +43,10 @@ export interface LogEntry {
  * @public
  */
 export class Logger {
-  private logs: LogEntry[] = [];
+  private logs: { level: LogLevel; message: string; timestamp: number; data?: unknown }[] = [];
   private maxLogs: number;
   private logLevel: LogLevel;
+  private currentLevel: LogLevel = LogLevel.DEBUG;
   private onLogCallback?: (entry: LogEntry) => void;
 
   /**
@@ -57,6 +58,22 @@ export class Logger {
   constructor(maxLogs: number = 1000, logLevel: LogLevel = LogLevel.INFO) {
     this.maxLogs = maxLogs;
     this.logLevel = logLevel;
+    this.currentLevel = logLevel;
+  }
+
+  /**
+   * Gets the numeric value of a log level for comparison.
+   * 
+   * @private
+   */
+  private getLevelValue(level: LogLevel): number {
+    const levelMap: Record<LogLevel, number> = {
+      [LogLevel.DEBUG]: 0,
+      [LogLevel.INFO]: 1,
+      [LogLevel.WARN]: 2,
+      [LogLevel.ERROR]: 3
+    };
+    return levelMap[level];
   }
 
   /**
@@ -66,64 +83,77 @@ export class Logger {
    * @param data - Optional additional data
    */
   log(message: string, data?: unknown): void {
-    this.addLog(LogLevel.INFO, message, data);
+    if (this.getLevelValue(LogLevel.INFO) < this.getLevelValue(this.currentLevel)) {
+      return;
+    }
+    this.logs.push({
+      level: LogLevel.INFO,
+      message,
+      timestamp: Date.now(),
+      data
+    });
+    this.maintainMaxLogs();
   }
 
   /**
    * Logs a debug-level message.
    * 
    * @param message - Log message
-   * @param data - Optional additional data
    */
-  debug(message: string, data?: unknown): void {
-    this.addLog(LogLevel.DEBUG, message, data);
+  public debug(message: string): void {
+    if (this.getLevelValue(LogLevel.DEBUG) < this.getLevelValue(this.currentLevel)) {
+      return;
+    }
+    this.logs.push({
+      level: LogLevel.DEBUG,
+      message,
+      timestamp: Date.now()
+    });
+    this.maintainMaxLogs();
   }
 
   /**
    * Logs a warning-level message.
    * 
    * @param message - Log message
-   * @param data - Optional additional data
    */
-  warn(message: string, data?: unknown): void {
-    this.addLog(LogLevel.WARN, message, data);
+  public warn(message: string): void {
+    if (this.getLevelValue(LogLevel.WARN) < this.getLevelValue(this.currentLevel)) {
+      return;
+    }
+    this.logs.push({
+      level: LogLevel.WARN,
+      message,
+      timestamp: Date.now()
+    });
+    this.maintainMaxLogs();
   }
 
   /**
    * Logs an error-level message.
    * 
    * @param message - Log message
-   * @param data - Optional additional data
    */
-  error(message: string, data?: unknown): void {
-    this.addLog(LogLevel.ERROR, message, data);
+  public error(message: string): void {
+    if (this.getLevelValue(LogLevel.ERROR) < this.getLevelValue(this.currentLevel)) {
+      return;
+    }
+    this.logs.push({
+      level: LogLevel.ERROR,
+      message,
+      timestamp: Date.now()
+    });
+    this.maintainMaxLogs();
   }
 
   /**
-   * Adds a log entry.
+   * Maintains maximum log size by removing oldest entries.
    * 
    * @private
    */
-  private addLog(level: LogLevel, message: string, data?: unknown): void {
-    if (this.shouldLog(level)) {
-      const entry: LogEntry = {
-        level,
-        message,
-        timestamp: Date.now(),
-        data
-      };
-
-      this.logs.push(entry);
-
-      // Maintain max log size
-      if (this.logs.length > this.maxLogs) {
-        this.logs.shift();
-      }
-
-      // Call external callback if set
-      if (this.onLogCallback) {
-        this.onLogCallback(entry);
-      }
+  private maintainMaxLogs(): void {
+    if (this.logs.length > this.maxLogs) {
+      this.logs.shift();
     }
   }
 
@@ -143,7 +173,7 @@ export class Logger {
    * @returns Array of log entries
    */
   getLogs(): LogEntry[] {
-    return [...this.logs];
+    return [...this.logs] as LogEntry[];
   }
 
   /**
@@ -153,13 +183,15 @@ export class Logger {
    * @returns Array of filtered log entries
    */
   getLogsByLevel(level: LogLevel): LogEntry[] {
-    return this.logs.filter(log => log.level === level);
+    return this.logs.filter(log => log.level === level) as LogEntry[];
   }
 
   /**
    * Clears all logs.
+   * 
+   * @public
    */
-  clearLogs(): void {
+  public clearLogs(): void {
     this.logs = [];
   }
 
@@ -177,7 +209,8 @@ export class Logger {
    * 
    * @param level - New minimum log level
    */
-  setLogLevel(level: LogLevel): void {
+  public setLogLevel(level: LogLevel): void {
+    this.currentLevel = level;
     this.logLevel = level;
   }
 }

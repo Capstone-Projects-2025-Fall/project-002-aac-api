@@ -123,7 +123,8 @@ export class PipelineManager {
       const intentEvent: IntentEvent = {
         type: 'intent',
         timestamp: Date.now(),
-        intent
+        intent,
+        confidence: intent.confidence
       };
       this.emitEvent(intentEvent);
     }

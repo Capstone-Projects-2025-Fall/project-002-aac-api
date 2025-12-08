@@ -3,7 +3,8 @@
  * @module asr/RemoteASRAdapter
  */
 
-import { ASRAdapter, TranscriptEvent } from './BrowserASRAdapter';
+import { ASRAdapter } from './BrowserASRAdapter';
+import { TranscriptEvent } from '../types';
 
 /**
  * Remote server-based ASR adapter.

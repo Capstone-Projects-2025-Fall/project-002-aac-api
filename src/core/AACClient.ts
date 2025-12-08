@@ -4,13 +4,9 @@
  * @module core/AACClient
  */
 
-import { AACClientConfig, AudioEvent, AudioEventCallback, Intent, IntentCallback } from '../types';
+import { AACClientConfig, AACEvent, Intent, ErrorObject } from '../types';
 import { MicManager } from '../audio/MicManager';
-import { PipelineManager } from '../pipeline/PipelineManager';
-import { BrowserASRAdapter } from '../asr/BrowserASRAdapter';
-import { RemoteASRAdapter } from '../asr/RemoteASRAdapter';
-import { Logger } from '../middleware/Logger';
-import { CacheManager } from '../middleware/CacheManager';
+import { NoiseFilter } from '../audio/NoiseFilter';
 
 /**
  * Main client class for the AAC SDK.
@@ -21,12 +17,12 @@ import { CacheManager } from '../middleware/CacheManager';
  * @example
  * ```typescript
  * const client = new AACClient({
- *   enableNoiseFilter: true,
- *   enableCache: true,
- *   asrAdapter: 'browser'
+ *   asrAdapter: 'browser',
+ *   confidenceThreshold: 0.8,
+ *   inputType: 'free'
  * });
  * 
- * client.onIntent((intent) => {
+ * client.subscribe('onIntent', (intent) => {
  *   console.log('Received intent:', intent.action);
  * });
  * 
@@ -37,37 +33,61 @@ import { CacheManager } from '../middleware/CacheManager';
  */
 export class AACClient {
   private micManager: MicManager;
-  private pipelineManager: PipelineManager;
-  private logger?: Logger;
-  private cacheManager?: CacheManager;
-  private eventCallbacks: Set<AudioEventCallback> = new Set();
-  private intentCallbacks: Set<IntentCallback> = new Set();
+  private noiseFilter: NoiseFilter;
+  private eventSubscribers: Map<AACEvent, Set<Function>> = new Map();
   private isRunning: boolean = false;
+  private config: AACClientConfig;
 
   /**
    * Creates a new AACClient instance.
    * 
    * @param config - Configuration options for the client
    */
-  constructor(private config: AACClientConfig = {}) {
+  constructor(config: AACClientConfig = {}) {
+    this.config = {
+      asrAdapter: config.asrAdapter || 'browser',
+      confidenceThreshold: config.confidenceThreshold ?? 0.7,
+      inputType: config.inputType || 'free'
+    };
+
     this.micManager = new MicManager();
-    
-    // Initialize ASR adapter based on config
-    const asrAdapter = config.asrAdapter === 'remote' 
-      ? new RemoteASRAdapter(config.asrEndpoint)
-      : new BrowserASRAdapter();
-    
-    this.pipelineManager = new PipelineManager(asrAdapter, {
-      enableNoiseFilter: config.enableNoiseFilter ?? false
+    this.noiseFilter = new NoiseFilter();
+
+    // Initialize event subscriber maps
+    this.eventSubscribers.set('onTranscript', new Set());
+    this.eventSubscribers.set('onIntent', new Set());
+    this.eventSubscribers.set('onError', new Set());
+
+    // Set up audio frame processing pipeline
+    this.setupPipeline();
+  }
+
+  /**
+   * Sets up the audio processing pipeline.
+   * 
+   * Pipeline: MicManager → NoiseFilter → ASR → IntentInterpreter
+   * 
+   * @private
+   */
+  private setupPipeline(): void {
+    this.micManager.onAudioFrame((buffer: Float32Array) => {
+      try {
+        // Process through noise filter
+        const filteredBuffer = this.noiseFilter.process(buffer);
+
+        // TODO: Process through ASR adapter (placeholder)
+        // const transcript = await this.processASR(filteredBuffer);
+        // this.emit('onTranscript', transcript);
+
+        // TODO: Process through intent interpreter (placeholder)
+        // const intent = await this.processIntent(transcript);
+        // if (intent && intent.confidence >= this.config.confidenceThreshold) {
+        //   this.emit('onIntent', intent);
+        // }
+      } catch (error) {
+        this.emitError('PIPELINE_ERROR', error instanceof Error ? error.message : String(error));
+      }
     });
-
-    if (config.enableLogging) {
-      this.logger = new Logger();
-    }
-
-    if (config.enableCache) {
-      this.cacheManager = new CacheManager();
-    }
   }
 
   /**
@@ -82,12 +102,11 @@ export class AACClient {
     }
 
     try {
-      await this.micManager.initialize();
-      this.pipelineManager.start(this.handlePipelineEvent.bind(this));
+      await this.micManager.start();
       this.isRunning = true;
-      this.logger?.log('AACClient started');
     } catch (error) {
-      this.emitError('Failed to start AACClient', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.emitError('START_ERROR', errorMessage);
       throw error;
     }
   }
@@ -100,89 +119,73 @@ export class AACClient {
       return;
     }
 
-    this.pipelineManager.stop();
-    this.micManager.cleanup();
-    this.isRunning = false;
-    this.logger?.log('AACClient stopped');
+    try {
+      this.micManager.stop();
+      this.isRunning = false;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.emitError('STOP_ERROR', errorMessage);
+    }
   }
 
   /**
-   * Subscribes to all audio events.
+   * Subscribes to an AAC event.
    * 
-   * @param callback - Function to call when any audio event occurs
+   * @param event - The event type to subscribe to
+   * @param callback - Function to call when the event occurs
+   * 
+   * @example
+   * ```typescript
+   * client.subscribe('onTranscript', (transcript: string) => {
+   *   console.log('Transcript:', transcript);
+   * });
+   * 
+   * client.subscribe('onIntent', (intent: Intent) => {
+   *   console.log('Intent:', intent.action);
+   * });
+   * 
+   * client.subscribe('onError', (error: ErrorObject) => {
+   *   console.error('Error:', error.message);
+   * });
+   * ```
    */
-  onEvent(callback: AudioEventCallback): void {
-    this.eventCallbacks.add(callback);
+  subscribe(event: AACEvent, callback: Function): void {
+    const subscribers = this.eventSubscribers.get(event);
+    if (subscribers) {
+      subscribers.add(callback);
+    }
   }
 
   /**
-   * Unsubscribes from audio events.
+   * Unsubscribes from an AAC event.
    * 
+   * @param event - The event type to unsubscribe from
    * @param callback - The callback function to remove
    */
-  offEvent(callback: AudioEventCallback): void {
-    this.eventCallbacks.delete(callback);
+  unsubscribe(event: AACEvent, callback: Function): void {
+    const subscribers = this.eventSubscribers.get(event);
+    if (subscribers) {
+      subscribers.delete(callback);
+    }
   }
 
   /**
-   * Subscribes to intent events specifically.
-   * 
-   * @param callback - Function to call when an intent is recognized
-   */
-  onIntent(callback: IntentCallback): void {
-    this.intentCallbacks.add(callback);
-  }
-
-  /**
-   * Unsubscribes from intent events.
-   * 
-   * @param callback - The callback function to remove
-   */
-  offIntent(callback: IntentCallback): void {
-    this.intentCallbacks.delete(callback);
-  }
-
-  /**
-   * Handles events from the pipeline and distributes them to subscribers.
+   * Emits an event to all subscribers.
    * 
    * @private
    */
-  private handlePipelineEvent(event: AudioEvent): void {
-    // Check cache if enabled
-    if (this.cacheManager && event.type === 'intent') {
-      const cached = this.cacheManager.get(event);
-      if (cached) {
-        // Use cached result
-        return;
-      }
-    }
-
-    // Emit to all event subscribers
-    this.eventCallbacks.forEach(callback => {
-      try {
-        callback(event);
-      } catch (error) {
-        this.emitError('Error in event callback', error);
-      }
-    });
-
-    // Emit to intent subscribers if this is an intent event
-    if (event.type === 'intent' && 'intent' in event) {
-      this.intentCallbacks.forEach(callback => {
+  private emit(event: AACEvent, data: unknown): void {
+    const subscribers = this.eventSubscribers.get(event);
+    if (subscribers) {
+      subscribers.forEach(callback => {
         try {
-          callback(event.intent);
+          callback(data);
         } catch (error) {
-          this.emitError('Error in intent callback', error);
+          // Prevent callback errors from breaking the pipeline
+          console.error('Error in event callback:', error);
         }
       });
-
-      // Cache the intent if caching is enabled
-      if (this.cacheManager) {
-        this.cacheManager.set(event);
-      }
     }
-
-    this.logger?.log('Event emitted', { type: event.type });
   }
 
   /**
@@ -190,16 +193,9 @@ export class AACClient {
    * 
    * @private
    */
-  private emitError(message: string, error?: unknown): void {
-    const errorEvent: AudioEvent = {
-      type: 'error',
-      timestamp: Date.now(),
-      data: {
-        message,
-        error: error instanceof Error ? error.message : String(error)
-      }
-    };
-    this.handlePipelineEvent(errorEvent);
+  private emitError(code: string, message: string): void {
+    const error: ErrorObject = { code, message };
+    this.emit('onError', error);
   }
 
   /**
@@ -210,5 +206,13 @@ export class AACClient {
   getIsRunning(): boolean {
     return this.isRunning;
   }
-}
 
+  /**
+   * Gets the current configuration.
+   * 
+   * @returns Current configuration object
+   */
+  getConfig(): AACClientConfig {
+    return { ...this.config };
+  }
+}

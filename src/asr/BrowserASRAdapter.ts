@@ -2,8 +2,18 @@
  * @fileoverview Browser-based ASR adapter using Web Speech API.
  * @module asr/BrowserASRAdapter
  */
+declare global {
+    interface Window {
+      webkitSpeechRecognition: any;
+      SpeechRecognition: any;
+    }
+  }
+  
+  type SpeechRecognitionType = any; // temporarily bypass TS for initial scaffold  
 
 import { AudioEvent, TranscriptEvent } from '../types';
+
+export type { TranscriptEvent };
 
 /**
  * Interface for ASR adapters.
@@ -50,8 +60,9 @@ export interface ASRAdapter {
  * @public
  */
 export class BrowserASRAdapter implements ASRAdapter {
-  private recognition: SpeechRecognition | null = null;
+  private recognition: SpeechRecognitionType | null = null;
   private isActive: boolean = false;
+  private language: string = 'en-US';
 
   /**
    * Creates a new BrowserASRAdapter instance.
@@ -63,7 +74,7 @@ export class BrowserASRAdapter implements ASRAdapter {
         this.recognition = new SpeechRecognition();
         this.recognition.continuous = true;
         this.recognition.interimResults = true;
-        this.recognition.lang = 'en-US';
+        this.recognition.lang = this.language;
       }
     }
   }
@@ -84,21 +95,21 @@ export class BrowserASRAdapter implements ASRAdapter {
       return;
     }
 
-    this.recognition.onresult = (event) => {
-      const result = event.results[event.results.length - 1];
-      if (result.isFinal) {
-        const transcriptEvent: TranscriptEvent = {
-          type: 'transcript',
-          timestamp: Date.now(),
-          transcript: result[0].transcript,
-          confidence: result[0].confidence || 0.8
-        };
-        onTranscript(transcriptEvent);
-      }
+    this.recognition.onresult = (event: any) => {
+      const result: SpeechRecognitionResult = event.results[event.results.length - 1];
+      if (result && result.isFinal) {
+          const transcriptEvent: TranscriptEvent = {
+            type: 'transcript',
+            timestamp: Date.now(),
+            transcript: result[0].transcript,
+            confidence: result[0].confidence || 0.8
+          };
+          onTranscript(transcriptEvent);
+        }
     };
-
-    this.recognition.onerror = (event) => {
-      onError(new Error(`Speech recognition error: ${event.error}`));
+      
+    this.recognition.onerror = (event: any) => {
+        onError(new Error(`Speech recognition error: ${event.error}`));
     };
 
     this.recognition.onend = () => {
@@ -134,6 +145,7 @@ export class BrowserASRAdapter implements ASRAdapter {
    * @param lang - Language code (e.g., 'en-US', 'es-ES')
    */
   setLanguage(lang: string): void {
+    this.language = lang;
     if (this.recognition) {
       this.recognition.lang = lang;
     }
@@ -145,7 +157,7 @@ export class BrowserASRAdapter implements ASRAdapter {
    * @returns Current language code
    */
   getLanguage(): string {
-    return this.recognition?.lang || 'en-US';
+    return this.language;
   }
 }
 

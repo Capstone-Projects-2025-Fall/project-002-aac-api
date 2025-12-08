@@ -4,6 +4,33 @@
  */
 
 /**
+ * Configuration options for AACClient.
+ * 
+ * @public
+ */
+export interface AACClientConfig {
+  /** ASR adapter type to use */
+  asrAdapter?: 'browser' | 'remote';
+  /** Confidence threshold (0-1) for intent recognition */
+  confidenceThreshold?: number;
+  /** Input type for processing */
+  inputType?: 'free' | 'multipleChoice' | 'numeric';
+  /** Enable caching for repeated inputs */
+  enableCache?: boolean;
+  /** Enable noise filtering */
+  enableNoiseFilter?: boolean;
+  /** Enable logging/telemetry */
+  enableLogging?: boolean;
+}
+
+/**
+ * Event types emitted by the AAC SDK.
+ * 
+ * @public
+ */
+export type AACEvent = 'onTranscript' | 'onIntent' | 'onError';
+
+/**
  * Represents a structured intent parsed from a transcript.
  * 
  * @public
@@ -20,25 +47,13 @@ export interface Intent {
 }
 
 /**
- * Audio event types emitted by the SDK.
- * 
- * @public
- */
-export type AudioEventType = 
-  | 'audio-start'
-  | 'audio-end'
-  | 'transcript'
-  | 'intent'
-  | 'error';
-
-/**
- * Base interface for all audio events.
+ * Base interface for audio events.
  * 
  * @public
  */
 export interface AudioEvent {
   /** Type of audio event */
-  type: AudioEventType;
+  type: string;
   /** Timestamp when the event occurred */
   timestamp: number;
   /** Optional event-specific data */
@@ -46,71 +61,24 @@ export interface AudioEvent {
 }
 
 /**
- * Transcript event data.
+ * Error object with code and message.
  * 
  * @public
  */
-export interface TranscriptEvent extends AudioEvent {
-  type: 'transcript';
-  /** The recognized transcript text */
-  transcript: string;
-  /** Confidence score (0-1) */
-  confidence: number;
-}
-
-/**
- * Intent event data.
- * 
- * @public
- */
-export interface IntentEvent extends AudioEvent {
-  type: 'intent';
-  /** The parsed intent */
-  intent: Intent;
-}
-
-/**
- * Error event data.
- * 
- * @public
- */
-export interface ErrorEvent extends AudioEvent {
-  type: 'error';
-  /** Error message */
+export interface ErrorObject {
+  /** Error code identifier */
+  code: string;
+  /** Human-readable error message */
   message: string;
-  /** Optional error code */
-  code?: string;
 }
-
-/**
- * Configuration options for AACClient.
- * 
- * @public
- */
-export interface AACClientConfig {
-  /** Enable noise filtering */
-  enableNoiseFilter?: boolean;
-  /** Enable caching for repeated inputs */
-  enableCache?: boolean;
-  /** Enable logging/telemetry */
-  enableLogging?: boolean;
-  /** ASR adapter type to use */
-  asrAdapter?: 'browser' | 'remote';
-  /** Custom ASR endpoint URL (for remote adapter) */
-  asrEndpoint?: string;
-}
-
-/**
- * Callback function type for audio events.
- * 
- * @public
- */
-export type AudioEventCallback = (event: AudioEvent) => void;
-
-/**
- * Callback function type for intent events.
- * 
- * @public
- */
-export type IntentCallback = (intent: Intent) => void;
-
+  
+  export interface TranscriptEvent extends AudioEvent {
+    transcript: string;
+    confidence: number;
+  }
+  
+  export interface IntentEvent extends AudioEvent {
+    intent: Intent; // reuse your existing Intent interface
+    confidence?: number;
+  }
+  

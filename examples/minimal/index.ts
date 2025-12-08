@@ -3,56 +3,53 @@
  * 
  * This example demonstrates the basic usage of the AAC SDK in a game context.
  * It shows how to:
- * - Initialize the AACClient
- * - Subscribe to intent events
- * - Handle game actions based on voice commands
- * - Clean up resources
+ * - Initialize the AACClient with configuration
+ * - Subscribe to transcript, intent, and error events
+ * - Start and stop the client
+ * - Handle events in a game context
  */
 
-import { AACClient, Intent } from '../../src/core';
-
-/**
- * Simple game state for demonstration.
- */
-interface GameState {
-  position: { x: number; y: number };
-  health: number;
-  score: number;
-}
+import { AACClient } from '../../src/core/AACClient';
+import { Intent, ErrorObject } from '../../src/types';
 
 /**
  * Minimal game class that integrates with AAC SDK.
  */
 class MinimalGame {
   private client: AACClient;
-  private gameState: GameState;
 
   constructor() {
-    // Initialize AAC client with default configuration
+    // Initialize AAC client with configuration
     this.client = new AACClient({
-      enableNoiseFilter: true,
-      enableCache: true,
-      enableLogging: false, // Set to true for debugging
-      asrAdapter: 'browser'
+      asrAdapter: 'browser',
+      confidenceThreshold: 0.7,
+      inputType: 'free'
     });
 
-    // Initialize game state
-    this.gameState = {
-      position: { x: 0, y: 0 },
-      health: 100,
-      score: 0
-    };
+    // Subscribe to transcript events
+    this.client.subscribe('onTranscript', (transcript: string) => {
+      console.log('[Transcript]', transcript);
+    });
 
     // Subscribe to intent events
-    this.client.onIntent((intent: Intent) => {
-      this.handleIntent(intent);
+    this.client.subscribe('onIntent', (intent: Intent) => {
+      console.log('[Intent]', {
+        action: intent.action,
+        params: intent.params,
+        confidence: intent.confidence,
+        transcript: intent.transcript
+      });
+      
+      // Handle game actions based on intent
+      this.handleGameAction(intent);
     });
 
-    // Subscribe to all events for logging (optional)
-    this.client.onEvent((event) => {
-      if (event.type === 'error') {
-        console.error('AAC SDK Error:', event.data);
-      }
+    // Subscribe to error events
+    this.client.subscribe('onError', (error: ErrorObject) => {
+      console.error('[Error]', {
+        code: error.code,
+        message: error.message
+      });
     });
   }
 
@@ -64,7 +61,7 @@ class MinimalGame {
       console.log('Starting game...');
       await this.client.start();
       console.log('Game started! Voice commands are now active.');
-      console.log('Try saying: "move forward", "jump", "attack", etc.');
+      console.log('Try saying commands like: "move forward", "jump", "attack", etc.');
     } catch (error) {
       console.error('Failed to start game:', error);
       throw error;
@@ -81,109 +78,44 @@ class MinimalGame {
   }
 
   /**
-   * Handles intent events from the AAC SDK.
+   * Handles game actions based on recognized intents.
    * 
    * @param intent - The parsed intent from voice input
    */
-  private handleIntent(intent: Intent): void {
-    console.log(`Received intent: ${intent.action}`, intent.params);
-
+  private handleGameAction(intent: Intent): void {
     switch (intent.action) {
       case 'move':
-        this.handleMove(intent.params);
+        console.log(`Game action: Moving with params:`, intent.params);
         break;
       
       case 'jump':
-        this.handleJump();
+        console.log('Game action: Jumping');
         break;
       
       case 'attack':
-        this.handleAttack();
+        console.log('Game action: Attacking');
         break;
       
       case 'stop':
-        this.handleStop();
+        console.log('Game action: Stopping');
         break;
       
       case 'interact':
-        this.handleInteract();
+        console.log('Game action: Interacting');
         break;
       
       default:
-        console.log(`Unknown action: ${intent.action}`);
+        console.log(`Unknown game action: ${intent.action}`);
     }
   }
 
   /**
-   * Handles move action.
+   * Gets the current running state of the client.
    * 
-   * @param params - Optional parameters (e.g., direction)
+   * @returns True if the client is currently running
    */
-  private handleMove(params?: Record<string, unknown>): void {
-    const direction = params?.direction as string || 'forward';
-    console.log(`Moving ${direction}...`);
-    
-    // Update game state based on direction
-    switch (direction.toLowerCase()) {
-      case 'forward':
-      case 'up':
-        this.gameState.position.y += 1;
-        break;
-      case 'backward':
-      case 'down':
-        this.gameState.position.y -= 1;
-        break;
-      case 'left':
-        this.gameState.position.x -= 1;
-        break;
-      case 'right':
-        this.gameState.position.x += 1;
-        break;
-    }
-    
-    console.log(`New position: (${this.gameState.position.x}, ${this.gameState.position.y})`);
-  }
-
-  /**
-   * Handles jump action.
-   */
-  private handleJump(): void {
-    console.log('Jumping!');
-    // Game logic for jump would go here
-  }
-
-  /**
-   * Handles attack action.
-   */
-  private handleAttack(): void {
-    console.log('Attacking!');
-    this.gameState.score += 10;
-    console.log(`Score: ${this.gameState.score}`);
-  }
-
-  /**
-   * Handles stop action.
-   */
-  private handleStop(): void {
-    console.log('Stopping...');
-    // Game logic for stop would go here
-  }
-
-  /**
-   * Handles interact action.
-   */
-  private handleInteract(): void {
-    console.log('Interacting with object...');
-    // Game logic for interaction would go here
-  }
-
-  /**
-   * Gets the current game state.
-   * 
-   * @returns Current game state
-   */
-  getGameState(): GameState {
-    return { ...this.gameState };
+  isRunning(): boolean {
+    return this.client.getIsRunning();
   }
 }
 
@@ -213,4 +145,3 @@ if (require.main === module) {
 }
 
 export { MinimalGame };
-
