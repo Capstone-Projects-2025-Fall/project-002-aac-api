@@ -2,16 +2,9 @@
 AAC Board Speech Recognition Module
 ===================================
 Optimized speech recognition for AAC (Augmentative and Alternative Communication) devices.
-
-Features:
-- Multiple recognition backends (Google, Vosk offline)
-- Command mode with limited vocabulary for faster recognition
-- Word-level timing information
-- Standardized camelCase JSON responses
-- Audio quality validation
-- Optimized for low-latency AAC interactions
-
-Author: Gio, improvements for AAC optimization
+This module provides offline and online speech recognition capabilities,
+tailored for AAC use cases with command mode support, audio preprocessing,
+and response standardization.
 """
 
 import speech_recognition as sr
