@@ -43,7 +43,7 @@ This software implements a robust speech-to-text REST API with:
 | `upload` | Multer Instance | Memory-based upload handler (10MB limit). |
 | `LOG_DIR` | String | Directory used for daily JSON log files. |
 | `SPEECH_SCRIPT` | String | Path to Python speech recognition script. |
-| `SUPPORTED_FORMATS` | Array<String> | Allowed audio formats. |
+| `SUPPORTED_FORMATS` | Array\<String\> | Allowed audio formats. |
 | `SERVER_START_TIME` | Number | Millisecond timestamp for uptime calculations. |
 
 ---
