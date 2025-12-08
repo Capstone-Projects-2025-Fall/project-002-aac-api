@@ -637,6 +637,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [SpeechRecognition](https://github.com/Uberi/speech_recognition) - Python speech recognition library
 - [Vosk](https://alphacephei.com/vosk/) - Offline speech recognition
 - [Express.js](https://expressjs.com/) - Web framework for Node.js
+- Lily Ulrey - For creation of our project logo for the website. 
 
 ---
 
