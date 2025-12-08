@@ -279,20 +279,34 @@ def preprocess_audio(
         return audio
 
 
-def adjust_ambient_noise(recognizer: sr.Recognizer, source: sr.AudioSource, duration: float = 0.3) -> None:
+def adjust_ambient_noise(
+    recognizer: sr.Recognizer, 
+    source: sr.AudioSource, 
+    duration: float = 0.3,
+    use_cached: bool = True) -> None:
     """
     Adjust for ambient noise in the audio source.
-    Uses shorter duration for faster AAC response times.
-    
-    Args:
-        recognizer: SpeechRecognition Recognizer instance
-        source: Audio source to calibrate
-        duration: Calibration duration in seconds (default 0.3 for AAC speed)
+    Uses cached threshold when available for faster response.
     """
+    global _cached_energy_threshold, _energy_threshold_lock
+    
+    # Use cached threshold if available and requested
+    if use_cached and _cached_energy_threshold is not None:
+        recognizer.energy_threshold = _cached_energy_threshold
+        log_debug(f"Using cached energy threshold: {_cached_energy_threshold}")
+        return
+    
     try:
         recognizer.adjust_for_ambient_noise(source, duration=min(duration, 0.5))
+        
+        # Cache the threshold for future use
+        if not _energy_threshold_lock:
+            _energy_threshold_lock = True
+            _cached_energy_threshold = recognizer.energy_threshold
+            _energy_threshold_lock = False
+            log_debug(f"Cached energy threshold: {_cached_energy_threshold}")
+            
     except Exception:
-        # If calibration fails, use optimized default for AAC devices
         recognizer.energy_threshold = 350
 
 
@@ -346,18 +360,12 @@ def validate_audio_quality(audio: sr.AudioData, sample_rate: int, duration: floa
 # Speech Recognition
 # =============================================================================
 
-def recognize_vosk(audio_data: sr.AudioData, model: Any, command_mode: bool = False) -> Tuple[str, float, Dict]:
-    """
-    Recognize speech using Vosk offline model.
-    
-    Args:
-        audio_data: AudioData to recognize
-        model: Loaded Vosk model
-        command_mode: If True, use limited AAC command vocabulary
-        
-    Returns:
-        Tuple of (transcription, confidence, full_result)
-    """
+def recognize_vosk(
+    audio_data: sr.AudioData, 
+    model: Any, 
+    command_mode: bool = False
+) -> Tuple[str, float, Dict]:
+    """Recognize speech using Vosk offline model."""
     if vosk is None or model is None:
         raise RuntimeError("Vosk model is not loaded")
 
@@ -365,7 +373,6 @@ def recognize_vosk(audio_data: sr.AudioData, model: Any, command_mode: bool = Fa
     rec.SetMaxAlternatives(3)
     rec.SetWords(True)
     
-    # Apply command grammar if in command mode
     if command_mode:
         grammar = json.dumps(AAC_COMMANDS)
         try:
@@ -374,19 +381,23 @@ def recognize_vosk(audio_data: sr.AudioData, model: Any, command_mode: bool = Fa
         except Exception as e:
             log_debug(f"Failed to set command grammar: {e}")
 
-    # Process audio in chunks for better streaming compatibility
-    chunk_size = 4000
     audio_bytes = audio_data.frame_data
+    audio_length = len(audio_bytes)
     
-    for i in range(0, len(audio_bytes), chunk_size):
-        chunk = audio_bytes[i:i+chunk_size]
-        rec.AcceptWaveform(chunk)
+    # Adaptive chunk size based on audio length
+    # For short audio (< 1 second at 16kHz, 16-bit), process all at once
+    if audio_length < audio_data.sample_rate * 2:
+        rec.AcceptWaveform(audio_bytes)
+    else:
+        # Use larger chunks for longer audio
+        chunk_size = 8000  # Increased from 4000
+        for i in range(0, audio_length, chunk_size):
+            chunk = audio_bytes[i:i+chunk_size]
+            rec.AcceptWaveform(chunk)
 
-    # Finalize recognition
     result = json.loads(rec.FinalResult())
     text = result.get('text', '').strip()
 
-    # Calculate confidence
     confidence = 0.5
     if 'alternatives' in result and result['alternatives']:
         confidence = result['alternatives'][0].get('confidence', 0.5)
@@ -396,30 +407,6 @@ def recognize_vosk(audio_data: sr.AudioData, model: Any, command_mode: bool = Fa
             confidence = sum(word_confidences) / len(word_confidences)
     
     return text, confidence, result
-
-
-def classify_command(text: str) -> Optional[str]:
-    """
-    Classify recognized text into AAC command category.
-    
-    Args:
-        text: Recognized text
-        
-    Returns:
-        Command category or None if not a recognized command
-    """
-    if not text:
-        return None
-    
-    text_lower = text.lower().strip()
-    words = text_lower.split()
-    
-    for category, commands in COMMAND_CATEGORIES.items():
-        for word in words:
-            if word in commands:
-                return category
-    
-    return "freeform"
 
 
 def extract_word_timing(vosk_result: Dict) -> List[Dict[str, Any]]:
