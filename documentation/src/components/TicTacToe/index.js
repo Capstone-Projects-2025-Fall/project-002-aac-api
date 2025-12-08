@@ -777,12 +777,12 @@ const TicTacToe = () => {
 
       {/* Help Section */}
       <div className="help-section">
-        <h4 style={{ margin: '0 0 10px 0' }}>🗣️ Voice Commands</h4>
+        <h4 style={{ margin: '0 0 10px 0' }}> Voice Commands</h4>
         <p className="small"><strong>Positions:</strong> "top left", "center", "bottom right", etc.</p>
         <p className="small"><strong>Numbers:</strong> "one" through "nine" (1-9)</p>
         <p className="small"><strong>Control:</strong> "new game", "reset", "stop listening", "help"</p>
 
-        <h4 style={{ margin: '15px 0 10px 0' }}>⚡ Optimization Tips</h4>
+        <h4 style={{ margin: '15px 0 10px 0' }}> Optimization Tips</h4>
         <p className="small"><strong>Command Mode:</strong> Uses Vosk first (local, faster for short commands)</p>
         <p className="small"><strong>Skip Validation:</strong> Bypasses audio quality checks for trusted sources</p>
         <p className="small"><strong>Simple Filter:</strong> Uses faster single-pole audio filter</p>
