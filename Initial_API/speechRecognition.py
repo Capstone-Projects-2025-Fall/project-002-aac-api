@@ -140,6 +140,10 @@ def warm_up_models() -> Dict[str, bool]:
     
     return results
 
+def reset_cached_state():
+    """Reset cached state (useful for testing purposes)."""
+    global _cached_energy_threshold
+    _cached_energy_threshold = None
 
 # =============================================================================
 # Logging Utilities
@@ -211,50 +215,58 @@ def get_wav_metadata(audio_file: io.BytesIO) -> Dict[str, Any]:
     return metadata
 
 
-def preprocess_audio(recognizer: sr.Recognizer, audio: sr.AudioData) -> sr.AudioData:
+def preprocess_audio(
+    recognizer: sr.Recognizer, 
+    audio: sr.AudioData, 
+    apply_filter: bool = True,
+    use_simple_filter: bool = False
+) -> sr.AudioData:
     """
     Preprocess audio data for better recognition in AAC context.
-    
-    Applies high-pass filter to remove low-frequency noise common in
-    AAC device environments (HVAC, motor noise, etc.)
     
     Args:
         recognizer: SpeechRecognition Recognizer instance
         audio: AudioData to preprocess
-        
-    Returns:
-        Preprocessed AudioData
+        apply_filter: If False, skip filtering entirely (fastest)
+        use_simple_filter: If True, use faster single-pole filter instead of Butterworth
     """
+    if not apply_filter:
+        return audio
+    
     try:
-        # Convert to numpy array for processing
-        raw_data = np.frombuffer(audio.frame_data, np.int16)
+        raw_data = np.frombuffer(audio.frame_data, np.int16).astype(np.float64)
         
         if len(raw_data) == 0:
             return audio
         
-        # Apply high-pass filter to remove low frequency noise
-        nyquist = audio.sample_rate / 2
-        low_cutoff = 80  # Remove frequencies below 80Hz (common noise floor)
-        normal_cutoff = low_cutoff / nyquist
-        
-        # Check if cutoff is valid
-        if normal_cutoff >= 1.0 or normal_cutoff <= 0:
-            log_debug("Warning: Invalid cutoff frequency, skipping filter")
-            return audio
-        
-        # Design and apply Butterworth high-pass filter
-        b, a = signal.butter(4, normal_cutoff, btype='high', analog=False)
-        filtered_data = signal.filtfilt(b, a, raw_data)
+        if use_simple_filter:
+            # Simple single-pole high-pass filter (much faster)
+            # y[n] = alpha * (y[n-1] + x[n] - x[n-1])
+            alpha = 0.98  # Cutoff ~80Hz at 16kHz sample rate
+            filtered_data = np.zeros_like(raw_data)
+            filtered_data[0] = raw_data[0]
+            for i in range(1, len(raw_data)):
+                filtered_data[i] = alpha * (filtered_data[i-1] + raw_data[i] - raw_data[i-1])
+        else:
+            # Full Butterworth filter (more accurate but slower)
+            nyquist = audio.sample_rate / 2
+            low_cutoff = 80
+            normal_cutoff = low_cutoff / nyquist
+            
+            if normal_cutoff >= 1.0 or normal_cutoff <= 0:
+                log_debug("Warning: Invalid cutoff frequency, skipping filter")
+                return audio
+            
+            b, a = signal.butter(4, normal_cutoff, btype='high', analog=False)
+            filtered_data = signal.filtfilt(b, a, raw_data)
 
-        # Normalize audio to prevent clipping
+        # Normalize audio
         max_val = np.max(np.abs(filtered_data))
         if max_val > 0:
             filtered_data = filtered_data * (32767 * 0.9 / max_val)
 
-        # Ensure data is in valid range
         filtered_data = np.clip(filtered_data, -32768, 32767)
 
-        # Create new AudioData with processed audio
         processed_audio = sr.AudioData(
             filtered_data.astype(np.int16).tobytes(),
             audio.sample_rate,
