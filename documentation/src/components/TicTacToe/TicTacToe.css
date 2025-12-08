@@ -1,8 +1,7 @@
 /* TicTacToe.css
-   Consolidated, semantic stylesheet for TicTacToe React component
 */
 
-/* --- Base layout & typography --- */
+/* Base layout */
 .app-container {
   text-align: center;
   font-family: Arial, sans-serif;
@@ -19,7 +18,6 @@
   margin-bottom: 20px;
 }
 
-/* --- Status bar / pills --- */
 .status-row {
   display: flex;
   justify-content: center;
@@ -55,12 +53,12 @@
 .proc-medium { background-color: #fff3cd; }
 .proc-slow { background-color: #f8d7da; }
 
-/* --- Current player / winner --- */
+/* Current player / winner */
 .current-player { margin: 0; }
 .winner { color: #28a745; }
 .draw { color: #ffc107; }
 
-/* --- Controls & Buttons --- */
+/* Controls & Buttons */
 .controls {
   margin-bottom: 20px;
   display: flex;
@@ -87,7 +85,7 @@
 .btn-warning { background-color: #ff9800; }
 .btn-purple { background-color: #9c27b0; }
 
-/* --- Optimization settings --- */
+/* Optimization settings */
 .options-row {
   display: flex;
   justify-content: center;
@@ -152,14 +150,14 @@
   color: #1565c0;
 }
 
-/* --- Active opts small text --- */
+/* Active opts small text */
 .active-opts {
   font-size: 12px;
   color: #666;
   margin-top: 8px;
 }
 
-/* --- Messages --- */
+/*  Messages  */
 .status-messages { margin-top: 10px; }
 .continuous-status { color: #4CAF50; font-weight: bold; font-size: 18px; }
 .recording-status { color: #2196F3; font-weight: bold; }
@@ -173,7 +171,7 @@
   display: inline-block;
 }
 
-/* --- Board grid --- */
+/* Board grid */
 .board-grid {
   display: grid;
   grid-template-columns: repeat(3, 100px);
@@ -204,7 +202,7 @@
 /* Disabled state */
 .board-cell.disabled { cursor: not-allowed; opacity: 0.85; }
 
-/* --- API Log --- */
+/* API Log */
 .api-log {
   margin-top: 30px;
   padding: 20px;
@@ -265,7 +263,7 @@
 .log-entry.warning { border-left-color: #ffc107; }
 .log-entry.error { border-left-color: #dc3545; }
 
-/* --- Help section --- */
+/* Help section */
 .help-section {
   margin-top: 20px;
   padding: 20px;
@@ -276,7 +274,7 @@
   color: #333;
 }
 
-/* --- Small utilities & responsive --- */
+/* Small utilities & responsive */
 .small { font-size: 13px; color: #555; margin: 5px 0; }
 .bold { font-weight: 700; }
 
