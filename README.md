@@ -1,396 +1,653 @@
-# TicTacToe with Voice Control
+# AAC Board Speech Recognition API
 
-A voice-controlled Tic Tac Toe game for testing the AAC Board Speech Recognition API.
+A speech-to-text API designed for **AAC (Augmentative and Alternative Communication)** devices and applications. Optimized for low-latency voice command recognition to help developers integrate voice controls into games, apps, and assistive technologies.
 
-## Features
-
--  **Voice Control** - Play using speech commands
--  **Continuous Listening** - Hands-free gameplay
--  **Single Command Mode** - One command at a time
--  **API Logging** - Real-time view of API requests/responses
--  **Keyboard Fallback** - Click squares if voice isn't available
--  **Speech Feedback** - Game announces moves and status
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
+[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org/)
 
 ---
 
-## Prerequisites
+##  Features
 
-Before starting, make sure you have installed:
-
-- **Node.js** (v16 or higher) - [Download](https://nodejs.org/)
-- **Python** (v3.8 or higher) - [Download](https://python.org/)
-- **npm** (comes with Node.js)
-
-Verify installations:
-```bash
-node --version    # Should show v16.x.x or higher
-python3 --version # Should show Python 3.8.x or higher
-npm --version     # Should show 8.x.x or higher
-```
+-  **Multiple Recognition Engines** - Google Speech Recognition + Vosk offline fallback
+-  **Command Mode** - Optimized for short AAC commands with faster response times from AAC devices
+-  **Confidence Scoring** - Filter low-confidence recognitions
+-  **Word-Level Timing** - Get start/end times for each recognized word
+-  **Standardized JSON Responses** - Consistent camelCase API format
+-  **Request Logging** - Optional consent-based logging for analytics
+-  **Game Integration Ready** - Drop-in JavaScript module included
+-  **Privacy Focused** - Offline recognition available, logging requires consent
 
 ---
 
-## Installation
+## Table of Contents
 
-### Step 1: Clone or Download the Project
+- [Quick Start](#-quick-start)
+- [Installation](#-installation)
+- [API Reference](#-api-reference)
+- [Response Format](#-response-format)
+- [Game Integration](#-game-integration)
+- [Configuration](#-configuration)
+- [Testing](#-testing)
+- [Examples](#-examples)
+- [Troubleshooting](#-troubleshooting)
+- [Contributing](#-contributing)
+- [License](#-license)
 
-```bash
-# If using git
-git clone <your-repo-url>
-cd AAC-Board
+---
 
-# Or download and extract the ZIP file
-```
-
-### Step 2: Install API Server Dependencies
-
-```bash
-# Navigate to the API directory
-cd Initial_API
-
-# Install Node.js dependencies
-npm install
-```
-
-This installs:
-- express
-- multer
-- cors
-- (and other dependencies from package.json)
-
-### Step 3: Install Python Dependencies
+##  Quick Start - How to quickly run our API
 
 ```bash
-# Install required Python packages
-pip install SpeechRecognition --break-system-packages
-pip install vosk --break-system-packages
-pip install numpy --break-system-packages
-pip install scipy --break-system-packages
-
-# Or if you prefer using a virtual environment
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install SpeechRecognition vosk numpy scipy
-```
-
-### Step 4: Download Vosk Model (Optional but Recommended)
-
-For offline speech recognition, download a Vosk model:
-
-```bash
-# Create model directory
-mkdir -p model
-
-# Download small English model (40MB)
-cd model
-wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
-unzip vosk-model-small-en-us-0.15.zip
-cd ..
-```
-
-Or download manually from [Vosk Models](https://alphacephei.com/vosk/models) and extract to `Initial_API/model/`
-
-### Step 5: Install React Dependencies (for TicTacToe)
-
-```bash
-# Navigate to the React app directory (adjust path as needed)
-cd ../tictactoe-app  # or wherever your React app is
+# Clone the repository
+git clone https://github.com/yourusername/aac-board-api.git
+cd aac-board-api
 
 # Install dependencies
 npm install
-```
-
----
-
-## Project Structure
-
-```
-AAC-Board/
-├── Initial_API/
-│   ├── index.js              # Node.js API server
-│   ├── speechRecognition.py  # Python speech recognition
-│   ├── package.json          # Node.js dependencies
-│   ├── model/                # Vosk model directory
-│   │   └── vosk-model-small-en-us-0.15/
-│   └── tests/
-│       ├── api.test.js       # API tests
-│       └── test.py           # Python tests
-│
-├── tictactoe-app/            # React application
-│   ├── src/
-│   │   └── TicTacToe.js      # Voice-controlled game component
-│   ├── package.json
-│   └── ...
-│
-└── README.md
-```
-
----
-
-## Starting the Application
-
-### Terminal 1: Start the API Server
-
-```bash
-# Navigate to API directory
-cd Initial_API
+pip install SpeechRecognition vosk numpy scipy --break-system-packages
 
 # Start the server
 node index.js
 ```
 
-You should see:
-```
-╔════════════════════════════════════════════════════════════╗
-║           AAC Speech Recognition API v2.0.0                ║
-╠════════════════════════════════════════════════════════════╣
-║  Server running at: http://localhost:8080                  ║
-║                                                            ║
-║  Endpoints:                                                ║
-║    GET  /health   - Health check & status                  ║
-║    GET  /formats  - Supported audio formats                ║
-║    POST /upload   - Upload audio for transcription         ║
-╚════════════════════════════════════════════════════════════╝
-```
+The API is now running at `http://localhost:8080`
 
-### Terminal 2: Start the React App
-
-```bash
-# Navigate to React app directory
-cd tictactoe-app
-
-# Start development server
-npm start
-```
-
-The app will open automatically at `http://localhost:3000`
-
----
-
-## Quick Start (Both Servers)
-
-Create a start script for convenience:
-
-### start.sh (Linux/Mac)
-```bash
-#!/bin/bash
-
-# Start API server in background
-cd Initial_API
-node index.js &
-API_PID=$!
-
-# Wait for API to start
-sleep 2
-
-# Start React app
-cd ../tictactoe-app
-npm start
-
-# Cleanup on exit
-trap "kill $API_PID" EXIT
-```
-
-### start.bat (Windows)
-```batch
-@echo off
-
-:: Start API server in new window
-start "AAC API Server" cmd /k "cd Initial_API && node index.js"
-
-:: Wait for API to start
-timeout /t 3
-
-:: Start React app
-cd tictactoe-app
-npm start
-```
-
-Make executable and run:
-```bash
-# Linux/Mac
-chmod +x start.sh
-./start.sh
-
-# Windows
-start.bat
-```
-
----
-
-## Using the Game
-
-### Voice Commands
-
-| Command | Action |
-|---------|--------|
-| "top left", "top center", "top right" | Place mark in top row |
-| "middle left", "center", "middle right" | Place mark in middle row |
-| "bottom left", "bottom center", "bottom right" | Place mark in bottom row |
-| "one" through "nine" | Place mark (numbered 1-9) |
-| "new game", "reset" | Start a new game |
-| "stop listening" | Stop voice recognition |
-| "help" | Hear available commands |
-
-### Game Controls
-
-1. **Start Continuous** - Always listening, hands-free play
-2. **Single Command** - Records one command at a time
-3. **New Game** - Reset the board
-4. **Check API** - Verify server connection
-
-### AAC Command Mode
-
-Toggle "AAC Command Mode" for optimized short-phrase recognition. This is recommended for:
-- Faster response times
-- Better accuracy with simple commands
-- Reduced processing overhead
-
----
-
-## Troubleshooting
-
-### API Server Won't Start
-
-**Error: `EADDRINUSE: address already in use`**
-```bash
-# Find and kill process using port 8080
-lsof -i :8080
-kill -9 <PID>
-
-# Or use a different port
-PORT=8081 node index.js
-```
-
-**Error: `Cannot find module 'express'`**
-```bash
-cd Initial_API
-npm install
-```
-
-### Python Speech Recognition Errors
-
-**Error: `No module named 'speech_recognition'`**
-```bash
-pip install SpeechRecognition --break-system-packages
-```
-
-**Error: `No module named 'vosk'`**
-```bash
-pip install vosk --break-system-packages
-```
-
-**Error: `Vosk model not found`**
-- Download and extract the Vosk model to `Initial_API/model/`
-- Ensure the path matches: `model/vosk-model-small-en-us-0.15/`
-
-### Microphone Issues
-
-**Error: `NotAllowedError: Permission denied`**
-- Click the lock icon in your browser's address bar
-- Allow microphone access for localhost
-- Refresh the page
-
-**Error: `NotFoundError: Requested device not found`**
-- Check that a microphone is connected
-- Check system audio settings
-- Try a different browser
-
-### React App Issues
-
-**Error: `Module not found`**
-```bash
-cd tictactoe-app
-rm -rf node_modules package-lock.json
-npm install
-```
-
-**Blank page or errors in console**
-- Check that the API server is running
-- Verify API URL in TicTacToe.js matches your server
-
-### Low Recognition Accuracy
-
-1. Enable "AAC Command Mode" 
-2. Speak clearly and at moderate pace
-3. Reduce background noise
-4. Check the confidence scores in the API log
-5. Try the Vosk offline model for better accuracy
-
----
-
-## Testing
-
-### Test the API
+### Test it:
 
 ```bash
 # Health check
 curl http://localhost:8080/health
 
-# Check formats
-curl http://localhost:8080/formats
+# Upload audio for transcription
+curl -X POST http://localhost:8080/upload \
+  -F "audioFile=@your-audio.wav"
 ```
+
+---
+
+##  Installation
+
+### Prerequisites
+
+| Requirement | Version | Download |
+|-------------|---------|----------|
+| Node.js | 16+ | [nodejs.org](https://nodejs.org/) |
+| Python | 3.8+ | [python.org](https://python.org/) |
+| npm | 8+ | Included with Node.js |
+
+### Step 1: Clone Repository
+
+```bash
+git clone https://github.com/yourusername/aac-board-api.git
+cd aac-board-api
+```
+
+### Step 2: Install Node.js Dependencies
+
+```bash
+npm install
+```
+
+### Step 3: Install Python Dependencies
+
+```bash
+# Standard installation
+pip install SpeechRecognition vosk numpy scipy
+
+# If you get externally-managed-environment error (Python 3.11+)
+pip install SpeechRecognition vosk numpy scipy --break-system-packages
+
+# Or use a virtual environment
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install SpeechRecognition vosk numpy scipy
+```
+
+### Step 4: Download Vosk Model (Optional)
+
+If Vosk failes to compile from python installation, an alternative method is to download the model directly into your system and the unzip within the project folder. This also enables it to work offline if internet access is a major concern.
+
+For offline speech recognition:
+
+```bash
+mkdir -p model && cd model
+wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
+unzip vosk-model-small-en-us-0.15.zip
+cd ..
+```
+
+Other models available at [alphacephei.com/vosk/models](https://alphacephei.com/vosk/models)
+
+### Step 5: Start the Server
+
+```bash
+node index.js
+```
+
+---
+
+## 📡 API Reference
+
+### Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/health` | Server health and status |
+| `GET` | `/formats` | Supported audio formats |
+| `POST` | `/upload` | Upload audio for transcription |
+
+---
+
+### GET `/health`
+
+Returns server status, uptime, and service availability.
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "timestamp": "2025-01-15T10:30:00.000Z",
+  "uptime": 3600,
+  "uptimeFormatted": "1h 0m 0s",
+  "version": "2.0.0",
+  "services": {
+    "speechRecognition": true,
+    "logging": true
+  },
+  "supportedFormats": ["WAV", "MP3", "FLAC", "OGG", "M4A"],
+  "endpoints": {
+    "health": "/health",
+    "upload": "/upload",
+    "formats": "/formats"
+  }
+}
+```
+
+---
+
+### GET `/formats`
+
+Returns supported audio formats and optimal settings.
+
+**Response:**
+```json
+{
+  "supportedFormats": ["WAV", "MP3", "FLAC", "AIFF", "OGG", "M4A", "RAW", "PCM"],
+  "optimal": {
+    "format": "WAV",
+    "sampleRate": 16000,
+    "bitDepth": 16,
+    "channels": 1
+  },
+  "notes": [
+    "WAV format recommended for lowest latency",
+    "16kHz sample rate optimal for speech recognition",
+    "Mono audio preferred (stereo will be converted)"
+  ]
+}
+```
+
+---
+
+### POST `/upload`
+
+Upload an audio file for speech-to-text transcription.
+
+**Request:**
+- Content-Type: `multipart/form-data`
+- Body: `audioFile` - The audio file to transcribe
+
+**Headers (Optional):**
+
+| Header | Description |
+|--------|-------------|
+| `x-command-mode` | Set to `"true"` for AAC command optimization |
+| `x-user-id` | User identifier for logging |
+| `x-session-id` | Session identifier (fallback for user-id) |
+| `x-logging-consent` | Set to `"true"` to enable server-side logging |
+
+**Example Request:**
+
+```bash
+curl -X POST http://localhost:8080/upload \
+  -H "x-command-mode: true" \
+  -H "x-user-id: user123" \
+  -F "audioFile=@recording.wav"
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "transcription": "hello world",
+  "confidence": 0.92,
+  "service": "vosk",
+  "processingTimeMs": 245,
+  "audio": {
+    "filename": "recording.wav",
+    "size": 32000,
+    "sizeBytes": 32000,
+    "format": "WAV",
+    "duration": 1.5,
+    "sampleRate": 16000,
+    "channels": 1,
+    "mimeType": "audio/wav"
+  },
+  "request": {
+    "timestamp": "2025-01-15T10:30:00.000Z",
+    "device": "Desktop",
+    "browser": "Chrome",
+    "userAgent": "Mozilla/5.0..."
+  },
+  "aac": {
+    "commandMode": true,
+    "commandType": "communication",
+    "isCommand": true,
+    "suggestedActions": ["send_message", "repeat", "edit"]
+  },
+  "wordTiming": [
+    { "word": "hello", "startTime": 0.12, "endTime": 0.45, "confidence": 0.94 },
+    { "word": "world", "startTime": 0.48, "endTime": 0.82, "confidence": 0.90 }
+  ]
+}
+```
+
+**Error Response (4xx/5xx):**
+```json
+{
+  "success": false,
+  "transcription": null,
+  "processingTimeMs": 150,
+  "error": {
+    "code": "AUDIO_QUALITY_ISSUES",
+    "message": "Audio appears silent or nearly silent",
+    "details": [
+      { "service": "google", "error": "Could not understand audio" },
+      { "service": "vosk", "error": "No speech detected" }
+    ]
+  },
+  "request": {
+    "timestamp": "2025-01-15T10:30:00.000Z",
+    "device": "Desktop",
+    "browser": "Chrome"
+  },
+  "warnings": ["Audio volume is low"]
+}
+```
+
+---
+
+## Response Format
+
+All responses use **camelCase** keys for consistency.
+
+### Success Response Structure
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `success` | boolean | Whether transcription succeeded |
+| `transcription` | string | Recognized text |
+| `confidence` | number | Recognition confidence (0-1) |
+| `service` | string | Recognition service used (`google`, `vosk`) |
+| `processingTimeMs` | number | Processing time in milliseconds |
+| `audio` | object | Audio file metadata |
+| `request` | object | Request metadata |
+| `aac` | object | AAC-specific information |
+| `wordTiming` | array | Word-level timing (when available) |
+| `user` | object | User identifier (if provided) |
+| `warnings` | array | Non-fatal warnings |
+
+### AAC Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `commandMode` | boolean | Whether command mode was enabled |
+| `commandType` | string | Classified command type |
+| `isCommand` | boolean | Whether recognized text is a known command |
+| `suggestedActions` | array | Suggested follow-up actions |
+
+**Command Types:**
+- `navigation` - back, next, up, down, etc.
+- `selection` - select, choose, yes, no, etc.
+- `communication` - hello, thank you, help, etc.
+- `media` - play, pause, stop, etc.
+- `freeform` - Unclassified speech
+
+---
+
+##  Game Integration
+
+We provide a drop-in JavaScript module for easy game integration.
+
+### Quick Integration
+
+```html
+<script type="module">
+  import { AACGameController } from './aac-voice-control.js';
+
+  const voice = new AACGameController({
+    apiUrl: 'http://localhost:8080',
+    commandMode: true
+  });
+
+  // Map voice commands to game actions
+  voice.mapCommand(['jump', 'hop'], () => player.jump());
+  voice.mapCommand(['left', 'go left'], () => player.moveLeft());
+  voice.mapCommand(['fire', 'shoot'], () => player.attack());
+
+  // Or use common command mappings
+  voice.mapCommonCommands({
+    up: () => player.moveUp(),
+    down: () => player.moveDown(),
+    select: () => game.select(),
+    pause: () => game.pause()
+  });
+
+  // Start listening
+  voice.start();
+</script>
+```
+
+### Module Features
+
+-  Continuous and single-shot listening modes
+-  Multi-phrase command mapping
+-  Confidence thresholds
+-  Built-in UI panel (optional)
+-  Event-based architecture
+
+See [aac-voice-control.js](./aac-voice-control.js) for full documentation.
+
+---
+
+##  Configuration
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `8080` | Server port |
+| `VOSK_MODEL_PATH` | `model/vosk-model-small-en-us-0.15` | Path to Vosk model |
+| `AAC_COMMAND_MODE` | `false` | Enable command mode by default |
+| `PRELOAD_VOSK` | `true` | Preload Vosk model on startup |
+| `NODE_ENV` | `development` | Environment (`production` disables auto-consent) |
+
+**Example:**
+```bash
+PORT=3000 VOSK_MODEL_PATH=./my-model node index.js
+```
+
+### Command Mode
+
+Enable for AAC devices to optimize for short commands:
+
+```bash
+# Via header
+curl -H "x-command-mode: true" ...
+
+# Via environment
+AAC_COMMAND_MODE=true node index.js
+```
+
+Benefits:
+- Faster recognition for short phrases
+- Limited vocabulary reduces errors
+- Optimized for common AAC commands
+
+---
+
+##  Testing
 
 ### Run API Tests
 
 ```bash
-cd Initial_API
 npm test
 ```
 
 ### Run Python Tests
 
 ```bash
-cd Initial_API
-python3 tests/test.py
+python test.py                    # Run all tests
+python test.py --audio file.wav   # Test specific file
+python test.py --record           # Record from microphone
+python test.py --command-mode     # Test with command mode
 ```
 
-### Test with Audio File
+### Manual Testing
 
 ```bash
-cd Initial_API
-python3 tests/test.py --audio tests/TestRecording.wav
+# Health check
+curl http://localhost:8080/health
+
+# Upload test audio
+curl -X POST http://localhost:8080/upload \
+  -F "audioFile=@tests/TestRecording.wav"
+
+# With command mode
+curl -X POST http://localhost:8080/upload \
+  -H "x-command-mode: true" \
+  -F "audioFile=@tests/TestRecording.wav"
 ```
 
 ---
 
-## Environment Variables
+##  Examples
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | 8080 | API server port |
-| `VOSK_MODEL_PATH` | model/vosk-model-small-en-us-0.15 | Path to Vosk model |
-| `AAC_COMMAND_MODE` | false | Enable command mode by default |
-| `PRELOAD_VOSK` | true | Preload Vosk model on startup |
+### Basic Transcription (Node.js)
 
-Example:
+```javascript
+const FormData = require('form-data');
+const fs = require('fs');
+const fetch = require('node-fetch');
+
+async function transcribe(audioPath) {
+  const form = new FormData();
+  form.append('audioFile', fs.createReadStream(audioPath));
+
+  const response = await fetch('http://localhost:8080/upload', {
+    method: 'POST',
+    body: form
+  });
+
+  const result = await response.json();
+  
+  if (result.success) {
+    console.log('Transcription:', result.transcription);
+    console.log('Confidence:', result.confidence);
+  } else {
+    console.error('Error:', result.error.message);
+  }
+}
+
+transcribe('recording.wav');
+```
+
+### Browser Integration
+
+```javascript
+async function recordAndTranscribe() {
+  // Get microphone access
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const mediaRecorder = new MediaRecorder(stream);
+  const chunks = [];
+
+  mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+  
+  mediaRecorder.onstop = async () => {
+    const blob = new Blob(chunks, { type: 'audio/webm' });
+    const formData = new FormData();
+    formData.append('audioFile', blob, 'recording.webm');
+
+    const response = await fetch('http://localhost:8080/upload', {
+      method: 'POST',
+      headers: { 'x-command-mode': 'true' },
+      body: formData
+    });
+
+    const result = await response.json();
+    console.log(result.transcription);
+  };
+
+  // Record for 3 seconds
+  mediaRecorder.start();
+  setTimeout(() => mediaRecorder.stop(), 3000);
+}
+```
+
+### Python Client
+
+```python
+import requests
+
+def transcribe(audio_path, command_mode=False):
+    url = 'http://localhost:8080/upload'
+    
+    headers = {}
+    if command_mode:
+        headers['x-command-mode'] = 'true'
+    
+    with open(audio_path, 'rb') as f:
+        files = {'audioFile': f}
+        response = requests.post(url, files=files, headers=headers)
+    
+    result = response.json()
+    
+    if result['success']:
+        print(f"Transcription: {result['transcription']}")
+        print(f"Confidence: {result['confidence']:.1%}")
+        print(f"Service: {result['service']}")
+    else:
+        print(f"Error: {result['error']['message']}")
+    
+    return result
+
+# Usage
+transcribe('recording.wav', command_mode=True)
+```
+
+---
+
+##  Troubleshooting
+
+### Common Issues
+
+<details>
+<summary><strong>EADDRINUSE: Port already in use</strong></summary>
+
 ```bash
-PORT=3001 VOSK_MODEL_PATH=./my-model node index.js
+# Find process using port
+lsof -i :8080
+
+# Kill it
+kill -9 <PID>
+
+# Or use different port
+PORT=8081 node index.js
+```
+</details>
+
+<details>
+<summary><strong>Python module not found</strong></summary>
+
+```bash
+# Install missing module
+pip install SpeechRecognition --break-system-packages
+
+# Or use virtual environment
+python -m venv venv
+source venv/bin/activate
+pip install SpeechRecognition vosk numpy scipy
+```
+</details>
+
+<details>
+<summary><strong>Vosk model not found</strong></summary>
+
+```bash
+# Download and extract model
+mkdir -p model && cd model
+wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
+unzip vosk-model-small-en-us-0.15.zip
+```
+</details>
+
+<details>
+<summary><strong>Low recognition accuracy</strong></summary>
+
+1. Enable command mode: `-H "x-command-mode: true"`
+2. Use WAV format at 16kHz mono
+3. Reduce background noise
+4. Speak clearly at moderate pace
+5. Try the Vosk offline model
+</details>
+
+<details>
+<summary><strong>CORS errors in browser</strong></summary>
+
+The API includes CORS support. If issues persist:
+```javascript
+// Ensure you're using the correct URL
+const API_URL = 'http://localhost:8080';  // Not 127.0.0.1
+```
+</details>
+
+---
+
+##  Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+### Development Setup
+
+```bash
+# Clone your fork
+git clone https://github.com/yourusername/aac-board-api.git
+cd aac-board-api
+
+# Install dependencies
+npm install
+pip install -r requirements.txt
+
+# Run tests
+npm test
+python test.py
+
+# Start in development mode
+npm run dev
 ```
 
 ---
 
-## Browser Support
+##  License
 
-| Browser | Support |
-|---------|---------|
-| Chrome 66+ |  Full |
-| Firefox 60+ |  Full |
-| Safari 14+ |  Full |
-| Edge 79+ |  Full |
-| IE 11 |  Not supported |
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## Need Help?
+##  Acknowledgments
 
-1. Check the API log panel in the game for detailed request/response info
-2. Open browser developer tools (F12) for JavaScript errors
-3. Check terminal output for server-side errors
-4. Verify both servers are running on correct ports
+- [SpeechRecognition](https://github.com/Uberi/speech_recognition) - Python speech recognition library
+- [Vosk](https://alphacephei.com/vosk/) - Offline speech recognition
+- [Express.js](https://expressjs.com/) - Web framework for Node.js
+- Lily Ulrey - For creation of our project logo for the website. 
 
 ---
 
-## License
+##  Contact
 
-MIT
+- **Issues**: [GitHub Issues](https://github.com/yourusername/aac-board-api/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/yourusername/aac-board-api/discussions)
+
+---
+
+<p align="center">
+  Made with ❤️ for the AAC community
+</p>
