@@ -1,0 +1,287 @@
+/* TicTacToe.css
+   Consolidated, semantic stylesheet for TicTacToe React component
+*/
+
+/* --- Base layout & typography --- */
+.app-container {
+  text-align: center;
+  font-family: Arial, sans-serif;
+  padding: 20px;
+  color: #222;
+}
+
+.app-title {
+  margin-bottom: 8px;
+}
+
+.app-subtitle {
+  color: #666;
+  margin-bottom: 20px;
+}
+
+/* --- Status bar / pills --- */
+.status-row {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.status-pill {
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  display: inline-block;
+}
+
+.status-pill.ok { background-color: #d4edda; color: #155724; }
+.status-pill.error { background-color: #f8d7da; color: #721c24; }
+.status-pill.info { background-color: #e7f3ff; color: #1565c0; }
+
+.models-warmed { background-color: #d4edda; border-radius: 20px; padding: 8px 16px; font-size: 14px; }
+.service-pill { padding: 8px 16px; border-radius: 20px; font-size: 14px; }
+.service-vosk { color: #155724; background-color: #e6f4ea; }
+.service-google { color: #174ea6; background-color: #eaf2ff; }
+.service-default { color: #666; background-color: #f1f1f1; }
+
+.confidence-pill { padding: 8px 16px; border-radius: 20px; font-size: 14px; }
+.conf-high { background-color: #d4edda; }
+.conf-mid  { background-color: #fff3cd; }
+.conf-low  { background-color: #f8d7da; }
+
+.processing-pill { padding: 8px 16px; border-radius: 20px; font-size: 14px; }
+.proc-fast { background-color: #d4edda; }
+.proc-medium { background-color: #fff3cd; }
+.proc-slow { background-color: #f8d7da; }
+
+/* --- Current player / winner --- */
+.current-player { margin: 0; }
+.winner { color: #28a745; }
+.draw { color: #ffc107; }
+
+/* --- Controls & Buttons --- */
+.controls {
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  padding: 12px 24px;
+  font-size: 16px;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  min-width: 140px;
+}
+
+.btn.disabled { cursor: not-allowed; opacity: 0.7; }
+
+.btn-primary { background-color: #2196F3; }
+.btn-success { background-color: #4CAF50; }
+.btn-danger { background-color: #f44336; }
+.btn-warning { background-color: #ff9800; }
+.btn-purple { background-color: #9c27b0; }
+
+/* --- Optimization settings --- */
+.options-row {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 2px solid #ddd;
+  font-size: 14px;
+}
+
+.toggle-label.command { background-color: #e3f2fd; border-color: #2196F3; }
+.toggle-label.skip-validation { background-color: #e8f5e9; border-color: #4CAF50; }
+
+.advanced-button {
+  padding: 8px 16px;
+  font-size: 14px;
+  background-color: #f5f5f5;
+  color: #333;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.advanced-options {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  flex-wrap: wrap;
+  padding: 15px;
+  background-color: #fafafa;
+  border-radius: 8px;
+  margin: 10px auto;
+  max-width: 600px;
+}
+
+.advanced-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  font-size: 13px;
+}
+
+.trusted-format {
+  padding: 6px 12px;
+  background-color: #e3f2fd;
+  border-radius: 6px;
+  border: 1px solid #2196F3;
+  font-size: 13px;
+  color: #1565c0;
+}
+
+/* --- Active opts small text --- */
+.active-opts {
+  font-size: 12px;
+  color: #666;
+  margin-top: 8px;
+}
+
+/* --- Messages --- */
+.status-messages { margin-top: 10px; }
+.continuous-status { color: #4CAF50; font-weight: bold; font-size: 18px; }
+.recording-status { color: #2196F3; font-weight: bold; }
+
+/* Error banner */
+.error-banner {
+  color: #dc3545;
+  background-color: #f8d7da;
+  padding: 10px 20px;
+  border-radius: 8px;
+  display: inline-block;
+}
+
+/* --- Board grid --- */
+.board-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 100px);
+  gap: 5px;
+  justify-content: center;
+  margin: 20px auto;
+}
+
+.board-cell {
+  width: 100px;
+  height: 100px;
+  font-weight: bold;
+  border: 2px solid #333;
+  border-radius: 8px;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Content variants */
+.board-cell.x { background-color: #e3f2fd; color: #1976d2; font-size: 36px; }
+.board-cell.o { background-color: #fce4ec; color: #c2185b; font-size: 36px; }
+.board-cell.empty { font-size: 11px; color: #999; }
+
+/* Disabled state */
+.board-cell.disabled { cursor: not-allowed; opacity: 0.85; }
+
+/* --- API Log --- */
+.api-log {
+  margin-top: 30px;
+  padding: 20px;
+  background-color: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  max-width: 900px;
+  margin: 30px auto;
+  text-align: left;
+  color: #fff;
+}
+
+.log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.log-title { margin: 0; font-size: 16px; color: #fff; }
+.log-clear-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  background-color: #333;
+  color: #fff;
+  border: 1px solid #555;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.log-list { max-height: 300px; overflow-y: auto; }
+.log-entry {
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background-color: #2d2d2d;
+  border-left: 3px solid #6c757d;
+  border-radius: 4px;
+  font-family: Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.log-type { font-weight: bold; margin-right: 8px; display: inline-block; }
+.log-ts { color: #999; margin-left: 8px; font-size: 12px; }
+.log-pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #d4d4d4;
+}
+
+/* Log border colors by type */
+.log-entry.request { border-left-color: #007bff; }
+.log-entry.response { border-left-color: #28a745; }
+.log-entry.command { border-left-color: #6f42c1; }
+.log-entry.action { border-left-color: #fd7e14; }
+.log-entry.system { border-left-color: #17a2b8; }
+.log-entry.health { border-left-color: #20c997; }
+.log-entry.warning { border-left-color: #ffc107; }
+.log-entry.error { border-left-color: #dc3545; }
+
+/* --- Help section --- */
+.help-section {
+  margin-top: 20px;
+  padding: 20px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  max-width: 600px;
+  margin: 20px auto;
+  color: #333;
+}
+
+/* --- Small utilities & responsive --- */
+.small { font-size: 13px; color: #555; margin: 5px 0; }
+.bold { font-weight: 700; }
+
+@media (max-width: 520px) {
+  .board-grid { grid-template-columns: repeat(3, 80px); }
+  .board-cell { width: 80px; height: 80px; }
+  .btn { min-width: 120px; padding: 10px 16px; }
+}
