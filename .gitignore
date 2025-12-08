@@ -20,6 +20,14 @@ node_modules/
 documentation/node_modules/
 documentation/build/
 
+# TypeScript / Build
+dist/
+*.tsbuildinfo
+
+# Test coverage
+coverage/
+.nyc_output/
+
 # Logs
 *.log
 npm-debug.log*
