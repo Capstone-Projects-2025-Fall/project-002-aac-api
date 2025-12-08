@@ -9,6 +9,7 @@ import React, { useState, useEffect, useRef } from 'react';
  * - Continuous listening mode for hands-free play
  * - Single command mode for one-shot recognition
  * - Command mode toggle for AAC-optimized recognition
+ * - Latency optimization options (skip validation, simple filter, etc.)
  * - Real-time API response display with confidence scores
  * - Word timing visualization
  * - Health check integration
@@ -24,7 +25,13 @@ const TicTacToe = () => {
   const [listening, setListening] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [continuousMode, setContinuousMode] = useState(false);
-  const [commandMode, setCommandMode] = useState(true); // AAC command mode
+  
+  // Optimization settings
+  const [commandMode, setCommandMode] = useState(true);
+  const [skipValidation, setSkipValidation] = useState(true);
+  const [skipPreprocessing, setSkipPreprocessing] = useState(false);
+  const [simpleFilter, setSimpleFilter] = useState(true);
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   
   // API state
   const [error, setError] = useState('');
@@ -32,6 +39,7 @@ const TicTacToe = () => {
   const [apiHealth, setApiHealth] = useState(null);
   const [lastConfidence, setLastConfidence] = useState(null);
   const [lastProcessingTime, setLastProcessingTime] = useState(null);
+  const [lastService, setLastService] = useState(null);
   
   // Refs for async operations
   const playerRef = useRef('X');
@@ -88,7 +96,8 @@ const TicTacToe = () => {
         status: data.status,
         uptime: data.uptimeFormatted,
         version: data.version,
-        services: data.services
+        services: data.services,
+        modelStatus: data.modelStatus
       });
       
       return data.status === 'ok';
@@ -257,7 +266,6 @@ const TicTacToe = () => {
 
     // Help command
     if (command.includes('help')) {
-     // speak("Say a position like top left, center, or bottom right. Or say new game to restart.");
       addApiLog('ACTION', { action: 'help', command });
       return;
     }
@@ -275,25 +283,47 @@ const TicTacToe = () => {
   // API Communication
   // ==========================================================================
 
+  const buildOptimizationHeaders = () => {
+    const headers = {};
+    
+    // Core optimization flags
+    if (commandMode) headers['x-command-mode'] = 'true';
+    if (skipValidation) headers['x-skip-validation'] = 'true';
+    if (skipPreprocessing) headers['x-skip-preprocessing'] = 'true';
+    if (simpleFilter) headers['x-simple-filter'] = 'true';
+    
+    // Always use WAV as trusted format since we convert to WAV
+    headers['x-trusted-format'] = 'WAV';
+    
+    return headers;
+  };
+
+  const getActiveOptimizations = () => {
+    const opts = [];
+    if (commandMode) opts.push('commandMode');
+    if (skipValidation) opts.push('skipValidation');
+    if (skipPreprocessing) opts.push('skipPreprocessing');
+    if (simpleFilter) opts.push('simpleFilter');
+    opts.push('trustedFormat:WAV');
+    return opts;
+  };
+
   const sendAudioToAPI = async (audioBlob) => {
     try {
       const formData = new FormData();
       formData.append('audioFile', audioBlob, 'recording.wav');
 
-      // Log request
+      const headers = buildOptimizationHeaders();
+      const activeOpts = getActiveOptimizations();
+
+      // Log request with optimization info
       addApiLog('REQUEST', {
         method: 'POST',
         url: `${API_BASE_URL}/upload`,
         audioSize: `${audioBlob.size} bytes`,
-        commandMode: commandMode,
-        headers: commandMode ? { 'x-command-mode': 'true' } : {}
+        optimizations: activeOpts,
+        headers: headers
       });
-
-      // Build headers
-      const headers = {};
-      if (commandMode) {
-        headers['x-command-mode'] = 'true';
-      }
 
       const response = await fetch(`${API_BASE_URL}/upload`, {
         method: 'POST',
@@ -304,15 +334,18 @@ const TicTacToe = () => {
       const data = await response.json();
       console.log('API Response:', data);
 
-      // Update stats from new camelCase response format
+      // Update stats from response
       if (data.confidence !== undefined) {
         setLastConfidence(data.confidence);
       }
       if (data.processingTimeMs !== undefined) {
         setLastProcessingTime(data.processingTimeMs);
       }
+      if (data.service) {
+        setLastService(data.service);
+      }
 
-      // Log response with new format
+      // Log response with optimization feedback
       addApiLog('RESPONSE', {
         status: response.status,
         success: data.success,
@@ -321,10 +354,11 @@ const TicTacToe = () => {
         service: data.service,
         processingTime: data.processingTimeMs ? `${data.processingTimeMs}ms` : 'N/A',
         aac: data.aac,
-        wordTiming: data.wordTiming?.length ? `${data.wordTiming.length} words` : 'N/A'
+        wordTiming: data.wordTiming?.length ? `${data.wordTiming.length} words` : 'N/A',
+        optimizationsUsed: data.optimizations || activeOpts
       });
 
-      // Handle errors (new format uses success boolean)
+      // Handle errors
       if (!data.success) {
         const errorMsg = data.error?.message || 'Unknown error';
         const errorCode = data.error?.code || 'UNKNOWN';
@@ -332,7 +366,6 @@ const TicTacToe = () => {
         
         if (!continuousMode) {
           setError(`${errorCode}: ${errorMsg}`);
-          // speak("Could not understand audio");
           setListening(false);
         }
         return;
@@ -345,7 +378,6 @@ const TicTacToe = () => {
       } else {
         if (!continuousMode) {
           setError('No transcription received');
-         // speak("No transcription received");
         }
       }
 
@@ -362,7 +394,6 @@ const TicTacToe = () => {
       
       if (!continuousMode) {
         setError(`API Error: ${error.message}`);
-        speak("Error connecting to server");
         setListening(false);
       }
     }
@@ -373,11 +404,9 @@ const TicTacToe = () => {
   // ==========================================================================
 
   const startContinuousListening = async () => {
-    // Check API health first
     const healthy = await checkApiHealth();
     if (!healthy) {
       setError('API is not available. Please start the server.');
-      // speak("API server is not available");
       return;
     }
 
@@ -397,10 +426,9 @@ const TicTacToe = () => {
       setContinuousMode(true);
       setListening(true);
 
-      // speak("Continuous listening activated");
       addApiLog('SYSTEM', {
         message: 'Continuous listening started',
-        commandMode: commandMode
+        optimizations: getActiveOptimizations()
       });
 
       recordNextChunk();
@@ -408,7 +436,6 @@ const TicTacToe = () => {
     } catch (error) {
       console.error('Error accessing microphone:', error);
       setError('Error accessing microphone');
-      // speak("Error accessing microphone");
     }
   };
 
@@ -432,7 +459,6 @@ const TicTacToe = () => {
 
       const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
 
-      // Only process if audio is substantial
       if (audioBlob.size > 1000) {
         setIsRecording(false);
         try {
@@ -444,7 +470,6 @@ const TicTacToe = () => {
         }
       }
 
-      // Continue recording if still in continuous mode
       if (continuousModeRef.current) {
         setTimeout(recordNextChunk, 100);
       }
@@ -453,7 +478,6 @@ const TicTacToe = () => {
     mediaRecorder.start();
     setIsRecording(true);
 
-    // Record for 3 seconds
     setTimeout(() => {
       if (mediaRecorder.state === 'recording') {
         mediaRecorder.stop();
@@ -476,16 +500,13 @@ const TicTacToe = () => {
       streamRef.current = null;
     }
 
-    // speak("Stopped listening");
     addApiLog('SYSTEM', { message: 'Continuous listening stopped' });
   };
 
   const startSingleListening = async () => {
-    // Check API health first
     const healthy = await checkApiHealth();
     if (!healthy) {
       setError('API is not available. Please start the server.');
-      // speak("API server is not available");
       return;
     }
 
@@ -519,7 +540,6 @@ const TicTacToe = () => {
         } catch (error) {
           console.error('Error processing audio:', error);
           setError('Error processing audio');
-          // speak("Error processing audio");
           setListening(false);
         }
 
@@ -529,9 +549,7 @@ const TicTacToe = () => {
       mediaRecorder.start();
       setListening(true);
       setIsRecording(true);
-      speak("Listening");
 
-      // Auto-stop after 4 seconds
       setTimeout(() => {
         if (mediaRecorderRef.current?.state === 'recording') {
           mediaRecorderRef.current.stop();
@@ -542,7 +560,6 @@ const TicTacToe = () => {
     } catch (error) {
       console.error('Error accessing microphone:', error);
       setError('Error accessing microphone');
-      // speak("Error accessing microphone");
     }
   };
 
@@ -575,9 +592,6 @@ const TicTacToe = () => {
     setBoard(newBoard);
     boardRef.current = newBoard;
 
-    const positionName = getPositionName(index);
-    // speak(`${currentPlayer} placed in ${positionName}`);
-
     const gameWinner = checkWinner(newBoard);
     if (gameWinner) {
       setWinner(gameWinner);
@@ -603,7 +617,7 @@ const TicTacToe = () => {
     setError('');
     setLastConfidence(null);
     setLastProcessingTime(null);
-    // speak("New game. X's turn");
+    setLastService(null);
   };
 
   // Cleanup on unmount
@@ -633,16 +647,22 @@ const TicTacToe = () => {
     return colors[type] || '#6c757d';
   };
 
+  const getServiceColor = (service) => {
+    if (service === 'vosk') return '#28a745';
+    if (service === 'google') return '#4285f4';
+    return '#6c757d';
+  };
+
   return (
     <div style={{ textAlign: 'center', fontFamily: 'Arial, sans-serif', padding: '20px' }}>
-      <h1 style={{ marginBottom: '10px' }}>🎮 Tic Tac Toe with Voice Control</h1>
-      <p style={{ color: '#666', marginBottom: '20px' }}>AAC Board API Test Interface</p>
+      <h1 style={{ marginBottom: '10px' }}> Tic Tac Toe with Voice Control</h1>
+      <p style={{ color: '#666', marginBottom: '20px' }}>AAC Board API Test Interface v2.1</p>
 
       {/* API Status Bar */}
       <div style={{
         display: 'flex',
         justifyContent: 'center',
-        gap: '20px',
+        gap: '15px',
         marginBottom: '20px',
         flexWrap: 'wrap'
       }}>
@@ -652,9 +672,32 @@ const TicTacToe = () => {
           borderRadius: '20px',
           fontSize: '14px'
         }}>
-          API: {apiHealth?.status === 'ok' ? '✅ Connected' : '❌ Disconnected'}
+          API: {apiHealth?.status === 'ok' ? ' Connected' : ' Disconnected'}
           {apiHealth?.version && ` (v${apiHealth.version})`}
         </div>
+
+        {apiHealth?.modelStatus?.warmedUp && (
+          <div style={{
+            padding: '8px 16px',
+            backgroundColor: '#d4edda',
+            borderRadius: '20px',
+            fontSize: '14px'
+          }}>
+             Models Warmed Up
+          </div>
+        )}
+        
+        {lastService && (
+          <div style={{
+            padding: '8px 16px',
+            backgroundColor: '#e7f3ff',
+            borderRadius: '20px',
+            fontSize: '14px',
+            color: getServiceColor(lastService)
+          }}>
+            🎯 {lastService.charAt(0).toUpperCase() + lastService.slice(1)}
+          </div>
+        )}
         
         {lastConfidence !== null && (
           <div style={{
@@ -670,19 +713,19 @@ const TicTacToe = () => {
         {lastProcessingTime !== null && (
           <div style={{
             padding: '8px 16px',
-            backgroundColor: lastProcessingTime < 1000 ? '#d4edda' : '#fff3cd',
+            backgroundColor: lastProcessingTime < 500 ? '#d4edda' : lastProcessingTime < 1000 ? '#fff3cd' : '#f8d7da',
             borderRadius: '20px',
             fontSize: '14px'
           }}>
-            ⏱️ {lastProcessingTime}ms
+            ⏱ {lastProcessingTime}ms
           </div>
         )}
       </div>
 
       {/* Game Status */}
       {!winner && <h2>Current Player: {player}</h2>}
-      {winner && winner !== 'draw' && <h2 style={{ color: '#28a745' }}>🎉 Player {winner} wins!</h2>}
-      {winner === 'draw' && <h2 style={{ color: '#ffc107' }}>🤝 It's a draw!</h2>}
+      {winner && winner !== 'draw' && <h2 style={{ color: '#28a745' }}> Player {winner} wins!</h2>}
+      {winner === 'draw' && <h2 style={{ color: '#ffc107' }}> It's a draw!</h2>}
 
       {/* Control Buttons */}
       <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap' }}>
@@ -700,7 +743,7 @@ const TicTacToe = () => {
                 cursor: 'pointer'
               }}
             >
-              🎤 Start Continuous
+               Start Continuous
             </button>
 
             <button
@@ -716,7 +759,7 @@ const TicTacToe = () => {
                 cursor: listening ? 'not-allowed' : 'pointer'
               }}
             >
-              {isRecording ? '🔴 Recording...' : '🎙️ Single Command'}
+              {isRecording ? ' Recording...' : ' Single Command'}
             </button>
           </>
         ) : (
@@ -732,7 +775,7 @@ const TicTacToe = () => {
               cursor: 'pointer'
             }}
           >
-            ⏹️ Stop Listening
+             Stop Listening
           </button>
         )}
 
@@ -748,7 +791,7 @@ const TicTacToe = () => {
             cursor: 'pointer'
           }}
         >
-          🔄 New Game
+           New Game
         </button>
 
         <button
@@ -763,46 +806,168 @@ const TicTacToe = () => {
             cursor: 'pointer'
           }}
         >
-          🔍 Check API
+           Check API
         </button>
       </div>
 
-      {/* Command Mode Toggle */}
+      {/* Optimization Settings */}
       <div style={{ marginBottom: '20px' }}>
-        <label style={{ 
-          display: 'inline-flex', 
-          alignItems: 'center', 
-          gap: '10px',
-          cursor: 'pointer',
-          padding: '8px 16px',
-          backgroundColor: commandMode ? '#e3f2fd' : '#f5f5f5',
-          borderRadius: '8px',
-          border: `2px solid ${commandMode ? '#2196F3' : '#ddd'}`
+        {/* Main toggle row */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          gap: '15px', 
+          flexWrap: 'wrap',
+          marginBottom: '10px'
         }}>
-          <input
-            type="checkbox"
-            checked={commandMode}
-            onChange={(e) => setCommandMode(e.target.checked)}
-            style={{ width: '18px', height: '18px' }}
-          />
-          <span>
-            <strong>AAC Command Mode</strong>
-            <br />
-            <small style={{ color: '#666' }}>Optimized for short commands</small>
-          </span>
-        </label>
+          <label style={{ 
+            display: 'inline-flex', 
+            alignItems: 'center', 
+            gap: '8px',
+            cursor: 'pointer',
+            padding: '8px 16px',
+            backgroundColor: commandMode ? '#e3f2fd' : '#f5f5f5',
+            borderRadius: '8px',
+            border: `2px solid ${commandMode ? '#2196F3' : '#ddd'}`,
+            fontSize: '14px'
+          }}>
+            <input
+              type="checkbox"
+              checked={commandMode}
+              onChange={(e) => setCommandMode(e.target.checked)}
+              style={{ width: '16px', height: '16px' }}
+            />
+            <span>
+              <strong>Command Mode</strong>
+              <small style={{ display: 'block', color: '#666', fontSize: '11px' }}>Vosk-first, optimized</small>
+            </span>
+          </label>
+
+          <label style={{ 
+            display: 'inline-flex', 
+            alignItems: 'center', 
+            gap: '8px',
+            cursor: 'pointer',
+            padding: '8px 16px',
+            backgroundColor: skipValidation ? '#e8f5e9' : '#f5f5f5',
+            borderRadius: '8px',
+            border: `2px solid ${skipValidation ? '#4CAF50' : '#ddd'}`,
+            fontSize: '14px'
+          }}>
+            <input
+              type="checkbox"
+              checked={skipValidation}
+              onChange={(e) => setSkipValidation(e.target.checked)}
+              style={{ width: '16px', height: '16px' }}
+            />
+            <span>
+              <strong>Skip Validation</strong>
+              <small style={{ display: 'block', color: '#666', fontSize: '11px' }}>Trusted audio source</small>
+            </span>
+          </label>
+
+          <button
+            onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+            style={{
+              padding: '8px 16px',
+              fontSize: '14px',
+              backgroundColor: '#f5f5f5',
+              color: '#333',
+              border: '2px solid #ddd',
+              borderRadius: '8px',
+              cursor: 'pointer'
+            }}
+          >
+             {showAdvancedOptions ? 'Hide' : 'More'} Options
+          </button>
+        </div>
+
+        {/* Advanced options */}
+        {showAdvancedOptions && (
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            gap: '15px', 
+            flexWrap: 'wrap',
+            padding: '15px',
+            backgroundColor: '#fafafa',
+            borderRadius: '8px',
+            margin: '10px auto',
+            maxWidth: '600px'
+          }}>
+            <label style={{ 
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              gap: '8px',
+              cursor: 'pointer',
+              padding: '6px 12px',
+              backgroundColor: skipPreprocessing ? '#fff3e0' : '#fff',
+              borderRadius: '6px',
+              border: `1px solid ${skipPreprocessing ? '#ff9800' : '#ddd'}`,
+              fontSize: '13px'
+            }}>
+              <input
+                type="checkbox"
+                checked={skipPreprocessing}
+                onChange={(e) => setSkipPreprocessing(e.target.checked)}
+                style={{ width: '14px', height: '14px' }}
+              />
+              <span>Skip Preprocessing</span>
+            </label>
+
+            <label style={{ 
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              gap: '8px',
+              cursor: 'pointer',
+              padding: '6px 12px',
+              backgroundColor: simpleFilter ? '#e8f5e9' : '#fff',
+              borderRadius: '6px',
+              border: `1px solid ${simpleFilter ? '#4CAF50' : '#ddd'}`,
+              fontSize: '13px'
+            }}>
+              <input
+                type="checkbox"
+                checked={simpleFilter}
+                onChange={(e) => setSimpleFilter(e.target.checked)}
+                style={{ width: '14px', height: '14px' }}
+              />
+              <span>Simple Filter</span>
+            </label>
+
+            <div style={{
+              padding: '6px 12px',
+              backgroundColor: '#e3f2fd',
+              borderRadius: '6px',
+              border: '1px solid #2196F3',
+              fontSize: '13px',
+              color: '#1565c0'
+            }}>
+              ✓ Trusted Format: WAV
+            </div>
+          </div>
+        )}
+
+        {/* Active optimizations indicator */}
+        <div style={{ 
+          fontSize: '12px', 
+          color: '#666',
+          marginTop: '8px'
+        }}>
+          Active: {getActiveOptimizations().join(', ')}
+        </div>
       </div>
 
       {/* Status Messages */}
       {continuousMode && (
         <p style={{ color: '#4CAF50', fontWeight: 'bold', fontSize: '18px' }}>
-           ALWAYS LISTENING - {isRecording ? '🔴 Recording...' : '⏳ Processing...'}
+          ALWAYS LISTENING - {isRecording ? ' Recording...' : ' Processing...'}
         </p>
       )}
 
       {listening && !continuousMode && (
         <p style={{ color: '#2196F3', fontWeight: 'bold' }}>
-          🎤 {isRecording ? 'Recording... (4 seconds)' : 'Processing...'}
+           {isRecording ? 'Recording... (4 seconds)' : 'Processing...'}
         </p>
       )}
 
@@ -814,7 +979,7 @@ const TicTacToe = () => {
           borderRadius: '8px',
           display: 'inline-block'
         }}>
-          ⚠️ {error}
+           {error}
         </p>
       )}
 
@@ -875,7 +1040,7 @@ const TicTacToe = () => {
           marginBottom: '15px'
         }}>
           <h3 style={{ margin: 0, color: '#fff', fontSize: '16px' }}>
-            📡 API Log
+             API Log
           </h3>
           <button
             onClick={() => setApiLogs([])}
@@ -947,6 +1112,17 @@ const TicTacToe = () => {
         </p>
         <p style={{ margin: '5px 0', color: '#555' }}>
           <strong>Control:</strong> "new game", "reset", "stop listening", "help"
+        </p>
+        
+        <h4 style={{ margin: '15px 0 10px 0' }}>⚡ Optimization Tips</h4>
+        <p style={{ margin: '5px 0', color: '#555', fontSize: '13px' }}>
+          <strong>Command Mode:</strong> Uses Vosk first (local, faster for short commands)
+        </p>
+        <p style={{ margin: '5px 0', color: '#555', fontSize: '13px' }}>
+          <strong>Skip Validation:</strong> Bypasses audio quality checks for trusted sources
+        </p>
+        <p style={{ margin: '5px 0', color: '#555', fontSize: '13px' }}>
+          <strong>Simple Filter:</strong> Uses faster single-pole audio filter
         </p>
       </div>
     </div>
