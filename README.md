@@ -49,6 +49,7 @@ npm install
 pip install SpeechRecognition vosk numpy scipy --break-system-packages
 
 # Start the server
+cd Initial_API
 node index.js
 ```
 
@@ -123,6 +124,7 @@ Other models available at [alphacephei.com/vosk/models](https://alphacephei.com/
 ### Step 5: Start the Server
 
 ```bash
+cd Initial_API
 node index.js
 ```
 
