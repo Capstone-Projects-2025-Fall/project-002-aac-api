@@ -10,7 +10,6 @@
  * - Standardized camelCase JSON responses
  * - Health check endpoint for device connectivity testing
  * - Consent-based logging
- * - Latency optimization options (parallel recognition, caching, fast paths)
  * 
  * Author: Kieran Plenn (original), Andrew Blass (audio upload), Gio (AAC improvements)
  * 
@@ -24,7 +23,7 @@ const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 8080;
 const fs = require('fs');
-const { spawn, execSync } = require('child_process');
+const { spawn } = require('child_process');
 const path = require('path');
 
 // =============================================================================
@@ -54,88 +53,9 @@ const SUPPORTED_FORMATS = ['WAV', 'MP3', 'FLAC', 'AIFF', 'OGG', 'M4A', 'RAW', 'P
 // Server start time for uptime tracking
 const SERVER_START_TIME = Date.now();
 
-// Model warm-up status
-let modelWarmUpStatus = {
-    warmedUp: false,
-    vosk: false,
-    warmUpTime: null
-};
-
 // =============================================================================
 // Helper Functions
 // =============================================================================
-
-/**
- * Warm up the speech recognition models on server startup
- * This reduces latency on the first request
- */
-function warmUpModels() {
-    const pythonCmd = process.platform === "win32" ? "python" : "python3";
-    
-    console.log('Warming up speech recognition models...');
-    const startTime = Date.now();
-    
-    try {
-        // Run a quick warm-up by sending minimal audio
-        const python = spawn(pythonCmd, [SPEECH_SCRIPT, '--skip-validation'], {
-            env: { ...process.env, PRELOAD_VOSK: 'true' }
-        });
-        
-        // Send empty/minimal data just to trigger model loading
-        const silentWav = createSilentWav(0.1); // 100ms of silence
-        python.stdin.write(silentWav);
-        python.stdin.end();
-        
-        python.on('close', (code) => {
-            const warmUpTime = Date.now() - startTime;
-            modelWarmUpStatus = {
-                warmedUp: true,
-                vosk: code === 0 || code === 1, // Even failed recognition means model loaded
-                warmUpTime: warmUpTime
-            };
-            console.log(`Model warm-up completed in ${warmUpTime}ms`);
-        });
-        
-        python.on('error', (err) => {
-            console.error('Model warm-up failed:', err.message);
-            modelWarmUpStatus.warmedUp = false;
-        });
-    } catch (error) {
-        console.error('Model warm-up error:', error.message);
-    }
-}
-
-/**
- * Create a minimal silent WAV file for warm-up
- * @param {number} durationSeconds - Duration in seconds
- * @returns {Buffer} WAV file buffer
- */
-function createSilentWav(durationSeconds) {
-    const sampleRate = 16000;
-    const numSamples = Math.floor(sampleRate * durationSeconds);
-    const dataSize = numSamples * 2; // 16-bit = 2 bytes per sample
-    const fileSize = 44 + dataSize;
-    
-    const buffer = Buffer.alloc(fileSize);
-    
-    // WAV header
-    buffer.write('RIFF', 0);
-    buffer.writeUInt32LE(fileSize - 8, 4);
-    buffer.write('WAVE', 8);
-    buffer.write('fmt ', 12);
-    buffer.writeUInt32LE(16, 16); // fmt chunk size
-    buffer.writeUInt16LE(1, 20);  // PCM format
-    buffer.writeUInt16LE(1, 22);  // mono
-    buffer.writeUInt32LE(sampleRate, 24);
-    buffer.writeUInt32LE(sampleRate * 2, 28); // byte rate
-    buffer.writeUInt16LE(2, 32);  // block align
-    buffer.writeUInt16LE(16, 34); // bits per sample
-    buffer.write('data', 36);
-    buffer.writeUInt32LE(dataSize, 40);
-    // Data section is already zeros (silence)
-    
-    return buffer;
-}
 
 /**
  * Parse user agent string to extract browser and device info
@@ -218,8 +138,7 @@ function buildSuccessResponse({
     userId,
     aac,
     wordTiming,
-    warnings,
-    optimizations
+    warnings
 }) {
     const response = {
         success: true,
@@ -236,7 +155,6 @@ function buildSuccessResponse({
     if (userId) response.user = { id: userId };
     if (wordTiming && wordTiming.length > 0) response.wordTiming = wordTiming;
     if (warnings && warnings.length > 0) response.warnings = warnings;
-    if (optimizations) response.optimizations = optimizations;
 
     return response;
 }
@@ -310,15 +228,6 @@ function parsePythonOutput(output) {
     }
 }
 
-/**
- * Parse boolean header value
- * @param {string} value - Header value
- * @returns {boolean}
- */
-function parseBoolHeader(value) {
-    return value === 'true' || value === '1';
-}
-
 // =============================================================================
 // Middleware
 // =============================================================================
@@ -353,26 +262,16 @@ app.get('/health', (req, res) => {
         timestamp: new Date().toISOString(),
         uptime: uptime,
         uptimeFormatted: `${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m ${uptime % 60}s`,
-        version: '2.1.0',
+        version: '2.0.0',
         services: {
             speechRecognition: scriptExists,
             logging: fs.existsSync(LOG_DIR)
         },
-        modelStatus: modelWarmUpStatus,
         supportedFormats: SUPPORTED_FORMATS,
         endpoints: {
             health: '/health',
             upload: '/upload',
             formats: '/formats'
-        },
-        optimizationOptions: {
-            commandMode: 'x-command-mode header (Vosk-first, skip preprocessing)',
-            skipValidation: 'x-skip-validation header (trusted audio sources)',
-            skipPreprocessing: 'x-skip-preprocessing header (raw audio)',
-            noParallel: 'x-no-parallel header (sequential recognition)',
-            simpleFilter: 'x-simple-filter header (faster audio filter)',
-            noCache: 'x-no-cache header (disable threshold caching)',
-            trustedFormat: 'x-trusted-format header (skip format detection)'
         }
     });
 });
@@ -396,8 +295,7 @@ app.get('/formats', (req, res) => {
             'WAV format recommended for lowest latency',
             '16kHz sample rate optimal for speech recognition',
             'Mono audio preferred (stereo will be converted)',
-            'Raw PCM supported with x-sample-rate header',
-            'Use x-trusted-format header to skip format detection for known formats'
+            'Raw PCM supported with x-sample-rate header'
         ]
     });
 });
@@ -415,14 +313,6 @@ app.get('/formats', (req, res) => {
  *   x-command-mode: 'true' to enable AAC command recognition mode
  *   x-sample-rate: Sample rate for raw PCM audio
  * 
- * Optimization Headers:
- *   x-skip-validation: 'true' to skip audio quality validation
- *   x-skip-preprocessing: 'true' to skip audio preprocessing
- *   x-no-parallel: 'true' to disable parallel recognition
- *   x-simple-filter: 'true' to use faster simple filter
- *   x-no-cache: 'true' to disable energy threshold caching
- *   x-trusted-format: Audio format (WAV, MP3, etc.) to skip detection
- * 
  * Body:
  *   audioFile: Audio file (multipart/form-data)
  *   commandMode: Boolean to enable command mode (alternative to header)
@@ -434,38 +324,10 @@ app.post('/upload', upload.single("audioFile"), async (req, res) => {
     const { browser, device } = parseUserAgent(userAgent);
     const userId = req.get('x-user-id') || req.body?.userId || req.get('x-session-id') || null;
     
-    // Parse optimization flags from headers
-    const commandMode = parseBoolHeader(req.get('x-command-mode')) || 
+    // Check for command mode
+    const commandMode = req.get('x-command-mode') === 'true' || 
                        req.body?.commandMode === true ||
                        req.body?.commandMode === 'true';
-    
-    const skipValidation = parseBoolHeader(req.get('x-skip-validation')) ||
-                          req.body?.skipValidation === true;
-    
-    const skipPreprocessing = parseBoolHeader(req.get('x-skip-preprocessing')) ||
-                             req.body?.skipPreprocessing === true;
-    
-    const noParallel = parseBoolHeader(req.get('x-no-parallel')) ||
-                      req.body?.noParallel === true;
-    
-    const simpleFilter = parseBoolHeader(req.get('x-simple-filter')) ||
-                        req.body?.simpleFilter === true;
-    
-    const noCache = parseBoolHeader(req.get('x-no-cache')) ||
-                   req.body?.noCache === true;
-    
-    const trustedFormat = req.get('x-trusted-format') || req.body?.trustedFormat || null;
-
-    // Track which optimizations are active
-    const activeOptimizations = {
-        commandMode,
-        skipValidation,
-        skipPreprocessing,
-        noParallel,
-        simpleFilter,
-        noCache,
-        trustedFormat: trustedFormat || null
-    };
 
     // Build request metadata
     const requestMeta = {
@@ -489,14 +351,14 @@ app.post('/upload', upload.single("audioFile"), async (req, res) => {
     }
 
     // Check for logging consent
-    const consentGiven = parseBoolHeader(req.get('x-logging-consent')) || 
+    const consentGiven = req.get('x-logging-consent') === 'true' || 
                         req.body?.loggingConsent === true ||
                         process.env.NODE_ENV !== 'production';
 
     const audioBuffer = req.file.buffer;
     const filename = req.file.originalname || 'unknown.wav';
     const fileSize = req.file.size;
-    const detectedFormat = trustedFormat || detectAudioFormat(filename);
+    const detectedFormat = detectAudioFormat(filename);
     const mimeType = req.file.mimetype || `audio/${detectedFormat.toLowerCase()}`;
 
     // Build audio metadata
@@ -512,26 +374,16 @@ app.post('/upload', upload.single("audioFile"), async (req, res) => {
     };
 
     try {
-        // Build Python command with optimization flags
+        // Build Python command with optional flags
         const pythonCmd = process.platform === "win32" ? "python" : "python3";
         const pythonArgs = [SPEECH_SCRIPT];
         
-        // Add optimization flags
-        if (commandMode) pythonArgs.push('--command-mode');
-        if (skipValidation) pythonArgs.push('--skip-validation');
-        if (skipPreprocessing) pythonArgs.push('--skip-preprocessing');
-        if (noParallel) pythonArgs.push('--no-parallel');
-        if (simpleFilter) pythonArgs.push('--simple-filter');
-        if (noCache) pythonArgs.push('--no-cache');
-
-        // Set environment variables for additional options
-        const env = { ...process.env };
-        if (trustedFormat) {
-            env.TRUSTED_FORMAT = trustedFormat;
+        if (commandMode) {
+            pythonArgs.push('--command-mode');
         }
 
         // Spawn Python process
-        const python = spawn(pythonCmd, pythonArgs, { env });
+        const python = spawn(pythonCmd, pythonArgs);
 
         // Send audio data to Python script via stdin
         python.stdin.write(audioBuffer);
@@ -595,8 +447,7 @@ app.post('/upload', upload.single("audioFile"), async (req, res) => {
                         isCommand: false
                     },
                     wordTiming: pythonResult.wordTiming,
-                    warnings: pythonResult.warnings,
-                    optimizations: activeOptimizations
+                    warnings: pythonResult.warnings
                 });
 
                 if (consentGiven) {
@@ -717,9 +568,9 @@ if (require.main === module) {
     app.listen(PORT, () => {
         console.log(`
 ╔════════════════════════════════════════════════════════════╗
-║           AAC Speech Recognition API v2.1.0                ║
+║           AAC Speech Recognition API v2.0.0                ║
 ╠════════════════════════════════════════════════════════════╣
-║  Server running at: http://localhost:${PORT.toString().padEnd(21)} ║
+║  Server running at: http://localhost:${PORT.toString().padEnd(21)}║
 ║                                                            ║
 ║  Endpoints:                                                ║
 ║    GET  /health   - Health check & status                  ║
@@ -730,19 +581,8 @@ if (require.main === module) {
 ║    • Command mode: x-command-mode: true                    ║
 ║    • Word timing in responses                              ║
 ║    • camelCase JSON responses                              ║
-║                                                            ║
-║  Optimization Headers:                                     ║
-║    • x-skip-validation     - Skip audio validation         ║
-║    • x-skip-preprocessing  - Skip audio filtering          ║
-║    • x-no-parallel         - Sequential recognition        ║
-║    • x-simple-filter       - Faster audio filter           ║
-║    • x-no-cache            - Disable threshold caching     ║
-║    • x-trusted-format      - Skip format detection         ║
 ╚════════════════════════════════════════════════════════════╝
         `);
-        
-        // Warm up models after server starts
-        warmUpModels();
     });
 }
 
