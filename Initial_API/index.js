@@ -585,3 +585,6 @@ if (require.main === module) {
         `);
     });
 }
+
+// Export app for testing
+module.exports = app;
