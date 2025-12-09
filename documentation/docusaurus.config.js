@@ -137,11 +137,6 @@ const config = {
             docId: 'intro',
             position: 'left',
             label: 'Documentation',
-          },{
-            to: '/tutorial/Intro',
-            label: 'Docusaurus Tutorial',
-            position: 'left',
-            activeBaseRegex: `/tutorial/`,
           },
           {
             to: '/tic-tac-toe',
