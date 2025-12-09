@@ -678,5 +678,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 <p align="center">
-  [Giovanni Muniz] • [Andrew Blass] • [Eric Smith] • [Kieran Plenn] • [Mohammed Eisa]
+  [Giovanni Muniz] • [Andrew Blass] • [Eric Smith] • [Kieran Plenn] • [Mohammed Eisa] • [Shrikanth Srenivasan] 
 </p>
