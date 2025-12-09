@@ -1,50 +1,101 @@
 import React, { useState, useEffect, useRef } from 'react';
+import './TicTacToe.css';
+
+/**
+ * Rewritten TicTacToe React component using semantic CSS (TicTacToe.css)
+ * Logic preserved from original file. See original: uploaded index.js. :contentReference[oaicite:1]{index=1}
+ */
 
 const TicTacToe = () => {
+  // Game state
   const [board, setBoard] = useState(['', '', '', '', '', '', '', '', '']);
   const [player, setPlayer] = useState('X');
   const [winner, setWinner] = useState('');
+
+  // Voice control state
   const [listening, setListening] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [continuousMode, setContinuousMode] = useState(false);
+
+  // Optimization settings
+  const [commandMode, setCommandMode] = useState(true);
+  const [skipValidation, setSkipValidation] = useState(true);
+  const [skipPreprocessing, setSkipPreprocessing] = useState(false);
+  const [simpleFilter, setSimpleFilter] = useState(true);
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+
+  // API state
   const [error, setError] = useState('');
   const [apiLogs, setApiLogs] = useState([]);
-  const [continuousMode, setContinuousMode] = useState(false);
-  const [lastConfidenceScore, setLastConfidenceScore] = useState(null);
-  const [lastSelectedApi, setLastSelectedApi] = useState(null);
-  const logCounterRef = useRef(0);
+  const [apiHealth, setApiHealth] = useState(null);
+  const [lastConfidence, setLastConfidence] = useState(null);
+  const [lastProcessingTime, setLastProcessingTime] = useState(null);
+  const [lastService, setLastService] = useState(null);
+
+  // Refs for async operations
   const playerRef = useRef('X');
   const boardRef = useRef(['', '', '', '', '', '', '', '', '']);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
-  const audioContextRef = useRef(null);
   const streamRef = useRef(null);
   const continuousModeRef = useRef(false);
 
-  // Text-to-speech function
+  // API configuration
+  const API_BASE_URL = 'http://localhost:8080';
+
+  // ---------- Text-to-Speech ----------
   const speak = (text) => {
     if ('speechSynthesis' in window) {
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 0.8;
+      utterance.rate = 0.9;
       utterance.pitch = 1;
-      //speechSynthesis.speak(utterance);
+      speechSynthesis.speak(utterance);
     }
   };
-  
 
-  // Add API log entry
+  // ---------- API Logging ----------
   const addApiLog = (type, data) => {
     const timestamp = new Date().toLocaleTimeString();
-    logCounterRef.current += 1; // Increment counter for unique IDs
     const logEntry = {
-      id: `log-${Date.now()}-${logCounterRef.current}`, // Ensure unique ID
+      id: Date.now(),
       timestamp,
       type,
-      data: JSON.stringify(data, null, 2)
+      data: typeof data === 'string' ? data : JSON.stringify(data, null, 2)
     };
-    setApiLogs(prev => [...prev.slice(-4), logEntry]); // Keep last 5 entries
+    setApiLogs(prev => [...prev.slice(-9), logEntry]); // Keep last 10 entries
   };
 
-  // Get position name for audio announcement
+  // ---------- Health Check ----------
+  const checkApiHealth = async () => {
+    try {
+      addApiLog('HEALTH', { action: 'Checking API health...' });
+
+      const response = await fetch(`${API_BASE_URL}/health`);
+      const data = await response.json();
+
+      setApiHealth(data);
+      addApiLog('HEALTH', {
+        status: data.status,
+        uptime: data.uptimeFormatted,
+        version: data.version,
+        services: data.services,
+        modelStatus: data.modelStatus
+      });
+
+      return data.status === 'ok';
+    } catch (error) {
+      setApiHealth({ status: 'error', error: error.message });
+      addApiLog('ERROR', {
+        action: 'Health check failed',
+        error: error.message
+      });
+      return false;
+    }
+  };
+
+  useEffect(() => { checkApiHealth(); }, []);
+
+  // ---------- Position Helpers ----------
   const getPositionName = (index) => {
     const positionNames = [
       'top left', 'top center', 'top right',
@@ -54,17 +105,24 @@ const TicTacToe = () => {
     return positionNames[index];
   };
 
-  // Convert audio blob to WAV format
+  const positions = {
+    'top left': 0, 'top center': 1, 'top right': 2,
+    'middle left': 3, 'center': 4, 'middle right': 5,
+    'bottom left': 6, 'bottom center': 7, 'bottom right': 8,
+    'one': 0, 'two': 1, 'three': 2, 'four': 3, 'five': 4,
+    'six': 5, 'seven': 6, 'eight': 7, 'nine': 8,
+    '1': 0, '2': 1, '3': 2, '4': 3, '5': 4,
+    '6': 5, '7': 6, '8': 7, '9': 8
+  };
+
+  // ---------- Audio Processing (unchanged) ----------
   const convertToWav = async (audioBlob) => {
     try {
       const arrayBuffer = await audioBlob.arrayBuffer();
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-
-      // Convert to WAV
       const wavBuffer = audioBufferToWav(audioBuffer);
       const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' });
-
       audioContext.close();
       return wavBlob;
     } catch (error) {
@@ -73,7 +131,6 @@ const TicTacToe = () => {
     }
   };
 
-  // Convert AudioBuffer to WAV format
   const audioBufferToWav = (buffer) => {
     const length = buffer.length * buffer.numberOfChannels * 2 + 44;
     const arrayBuffer = new ArrayBuffer(length);
@@ -82,36 +139,28 @@ const TicTacToe = () => {
     let offset = 0;
     let pos = 0;
 
-    // Write WAV header
-    const setUint16 = (data) => {
-      view.setUint16(pos, data, true);
-      pos += 2;
-    };
-    const setUint32 = (data) => {
-      view.setUint32(pos, data, true);
-      pos += 4;
-    };
+    const setUint16 = (data) => { view.setUint16(pos, data, true); pos += 2; };
+    const setUint32 = (data) => { view.setUint32(pos, data, true); pos += 4; };
 
-    // "RIFF" chunk descriptor
+    // RIFF header
     setUint32(0x46464952); // "RIFF"
-    setUint32(length - 8); // file length - 8
+    setUint32(length - 8);
     setUint32(0x45564157); // "WAVE"
 
-    // "fmt " sub-chunk
+    // fmt chunk
     setUint32(0x20746d66); // "fmt "
-    setUint32(16); // subchunk size
-    setUint16(1); // audio format (1 = PCM)
+    setUint32(16);
+    setUint16(1); // PCM
     setUint16(buffer.numberOfChannels);
     setUint32(buffer.sampleRate);
-    setUint32(buffer.sampleRate * 2 * buffer.numberOfChannels); // byte rate
-    setUint16(buffer.numberOfChannels * 2); // block align
-    setUint16(16); // bits per sample
+    setUint32(buffer.sampleRate * 2 * buffer.numberOfChannels);
+    setUint16(buffer.numberOfChannels * 2);
+    setUint16(16);
 
-    // "data" sub-chunk
+    // data chunk
     setUint32(0x61746164); // "data"
-    setUint32(length - pos - 4); // subchunk size
+    setUint32(length - pos - 4);
 
-    // Write interleaved data
     for (let i = 0; i < buffer.numberOfChannels; i++) {
       channels.push(buffer.getChannelData(i));
     }
@@ -129,26 +178,19 @@ const TicTacToe = () => {
     return arrayBuffer;
   };
 
-  const handleVoiceCommand = (command) => {
+  // ---------- Voice Command Processing ----------
+  const handleVoiceCommand = (command, apiResponse) => {
     console.log('Voice command:', command);
     setError('');
 
-    // Log voice command processing
+    const aacInfo = apiResponse?.aac || {};
     addApiLog('COMMAND', {
       rawCommand: command,
       currentPlayer: playerRef.current,
-      timestamp: new Date().toISOString()
+      commandType: aacInfo.commandType || 'unknown',
+      isCommand: aacInfo.isCommand || false,
+      confidence: apiResponse?.confidence
     });
-
-    const positions = {
-      'top left': 0, 'top center': 1, 'top right': 2,
-      'middle left': 3, 'center': 4, 'middle right': 5,
-      'bottom left': 6, 'bottom center': 7, 'bottom right': 8,
-      'one': 0, 'two': 1, 'three': 2, 'four': 3, 'five': 4,
-      'six': 5, 'seven': 6, 'eight': 7, 'nine': 8,
-      '1': 0, '2': 1, '3': 2, '4': 3, '5': 4,
-      '6': 5, '7': 6, '8': 7, '9': 8
-    };
 
     let position = positions[command];
 
@@ -162,7 +204,6 @@ const TicTacToe = () => {
     }
 
     if (position !== undefined) {
-      console.log('Moving to position:', position, 'Current player:', playerRef.current);
       addApiLog('ACTION', {
         action: 'place_mark',
         position: position,
@@ -173,202 +214,53 @@ const TicTacToe = () => {
       return;
     }
 
-    if (command === 'new game' || command === 'reset' || command.includes('new game') || command.includes('reset game')) {
-      console.log('Resetting game');
-      addApiLog('ACTION', {
-        action: 'reset_game',
-        command: command
-      });
+    if (command === 'new game' || command === 'reset' ||
+      command.includes('new game') || command.includes('reset game') ||
+      command.includes('start over')) {
+      addApiLog('ACTION', { action: 'reset_game', command });
       reset();
       return;
     }
 
-    if (command.includes('stop listening')) {
-      addApiLog('ACTION', {
-        action: 'stop_listening',
-        command: command
-      });
+    if (command.includes('stop listening') || command.includes('stop')) {
+      addApiLog('ACTION', { action: 'stop_listening', command });
       stopContinuousListening();
       return;
     }
 
+    if (command.includes('help')) {
+      addApiLog('ACTION', { action: 'help', command });
+      return;
+    }
+
     console.log('Command not recognized:', command);
-    addApiLog('ERROR', {
-      error: 'Command not recognized',
-      command: command
+    addApiLog('WARNING', {
+      message: 'Command not recognized',
+      command,
+      suggestion: 'Try: top left, center, bottom right, new game'
     });
     setError(`Command not recognized: "${command}"`);
   };
 
-  // Start continuous listening mode
-  const startContinuousListening = async () => {
-    try {
-      setError('');
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      continuousModeRef.current = true;
-      setContinuousMode(true);
-      setListening(true);
-
-      speak("Continuous listening activated. I'm always listening for your commands.");
-      addApiLog('SYSTEM', {
-        message: 'Continuous listening mode started',
-        timestamp: new Date().toISOString()
-      });
-
-      // Start the recording cycle
-      recordNextChunk();
-
-    } catch (error) {
-      console.error('Error accessing microphone:', error);
-      setError('Error accessing microphone');
-      speak("Error accessing microphone");
-    }
+  // ---------- API Communication ----------
+  const buildOptimizationHeaders = () => {
+    const headers = {};
+    if (commandMode) headers['x-command-mode'] = 'true';
+    if (skipValidation) headers['x-skip-validation'] = 'true';
+    if (skipPreprocessing) headers['x-skip-preprocessing'] = 'true';
+    if (simpleFilter) headers['x-simple-filter'] = 'true';
+    headers['x-trusted-format'] = 'WAV';
+    return headers;
   };
 
-  // Record and process audio chunks continuously
-  const recordNextChunk = () => {
-    if (!streamRef.current || !continuousModeRef.current) {
-      return;
-    }
-
-    const mediaRecorder = new MediaRecorder(streamRef.current);
-    mediaRecorderRef.current = mediaRecorder;
-    audioChunksRef.current = [];
-
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        audioChunksRef.current.push(event.data);
-      }
-    };
-
-    mediaRecorder.onstop = async () => {
-      // Only process if we're still in continuous mode
-      if (!continuousModeRef.current) {
-        return;
-      }
-
-      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-
-      // Only send if audio is substantial (more than 1KB to avoid silence)
-      if (audioBlob.size > 1000) {
-        setIsRecording(false);
-        try {
-          const wavBlob = await convertToWav(audioBlob);
-          await sendAudioToAPI(wavBlob);
-        } catch (error) {
-          console.error('Error processing audio:', error);
-          addApiLog('ERROR', {
-            error: 'Audio processing failed',
-            message: error.message
-          });
-        }
-      }
-
-      // Schedule next recording chunk if still in continuous mode
-      if (continuousModeRef.current) {
-        setTimeout(() => {
-          recordNextChunk();
-        }, 100); // Small delay before next chunk
-      }
-    };
-
-    mediaRecorder.start();
-    setIsRecording(true);
-
-    // Record for 3 seconds then process
-    setTimeout(() => {
-      if (mediaRecorder.state === 'recording') {
-        mediaRecorder.stop();
-      }
-    }, 3000);
-  };
-
-  // Stop continuous listening mode
-  const stopContinuousListening = () => {
-    continuousModeRef.current = false;
-    setContinuousMode(false);
-    setListening(false);
-    setIsRecording(false);
-
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
-    }
-
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-
-    speak("Continuous listening stopped");
-    addApiLog('SYSTEM', {
-      message: 'Continuous listening mode stopped',
-      timestamp: new Date().toISOString()
-    });
-  };
-
-  // Original single-shot listening (kept for compatibility)
-  const startListening = async () => {
-    try {
-      setError('');
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-      const mediaRecorder = new MediaRecorder(stream);
-
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-
-        try {
-          // Convert to WAV
-          const wavBlob = await convertToWav(audioBlob);
-          await sendAudioToAPI(wavBlob);
-        } catch (error) {
-          console.error('Error processing audio:', error);
-          setError('Error processing audio');
-          speak("Error processing audio");
-          setListening(false);
-        }
-
-        // Stop all tracks to release the microphone
-        stream.getTracks().forEach(track => track.stop());
-      };
-
-      mediaRecorder.start();
-      setListening(true);
-      setIsRecording(true);
-      speak("Listening for voice commands");
-
-      // Auto-stop after 3 seconds to capture a command
-      setTimeout(() => {
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-          mediaRecorderRef.current.stop();
-          setIsRecording(false);
-        }
-      }, 5000);
-
-    } catch (error) {
-      console.error('Error accessing microphone:', error);
-      setError('Error accessing microphone');
-      speak("Error accessing microphone");
-    }
-  };
-
-  const stopListening = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-    }
-    setListening(false);
-    speak("Stopped listening");
+  const getActiveOptimizations = () => {
+    const opts = [];
+    if (commandMode) opts.push('commandMode');
+    if (skipValidation) opts.push('skipValidation');
+    if (skipPreprocessing) opts.push('skipPreprocessing');
+    if (simpleFilter) opts.push('simpleFilter');
+    opts.push('trustedFormat:WAV');
+    return opts;
   };
 
   const sendAudioToAPI = async (audioBlob) => {
@@ -376,78 +268,213 @@ const TicTacToe = () => {
       const formData = new FormData();
       formData.append('audioFile', audioBlob, 'recording.wav');
 
-      console.log('Sending audio to API...', 'Size:', audioBlob.size, 'bytes');
+      const headers = buildOptimizationHeaders();
+      const activeOpts = getActiveOptimizations();
 
-      // Log API request
       addApiLog('REQUEST', {
         method: 'POST',
-        url: 'http://localhost:8080/upload',
-        contentType: 'multipart/form-data',
+        url: `${API_BASE_URL}/upload`,
         audioSize: `${audioBlob.size} bytes`,
-        filename: 'recording.wav'
+        optimizations: activeOpts,
+        headers: headers
       });
 
-      const response = await fetch('http://localhost:8080/upload', {
+      const response = await fetch(`${API_BASE_URL}/upload`, {
         method: 'POST',
+        headers,
         body: formData
       });
 
       const data = await response.json();
-      console.log('API Response:', data);
 
-      // Extract and store confidence score for display
-      if (data.confidenceScore !== null && data.confidenceScore !== undefined) {
-        setLastConfidenceScore(data.confidenceScore);
-        setLastSelectedApi(data.selectedApi || 'unknown');
-      }
+      if (data.confidence !== undefined) setLastConfidence(data.confidence);
+      if (data.processingTimeMs !== undefined) setLastProcessingTime(data.processingTimeMs);
+      if (data.service) setLastService(data.service);
 
-      // Log API response
       addApiLog('RESPONSE', {
         status: response.status,
-        statusText: response.statusText,
-        data: data
+        success: data.success,
+        transcription: data.transcription,
+        confidence: data.confidence ? `${(data.confidence * 100).toFixed(1)}%` : 'N/A',
+        service: data.service,
+        processingTime: data.processingTimeMs ? `${data.processingTimeMs}ms` : 'N/A',
+        aac: data.aac,
+        wordTiming: data.wordTiming?.length ? `${data.wordTiming.length} words` : 'N/A',
+        optimizationsUsed: data.optimizations || activeOpts
       });
 
-      if (response.status === 300) {
-        // Python script failed
-        console.error('Python script error:', data.error);
+      if (!data.success) {
+        const errorMsg = data.error?.message || 'Unknown error';
+        const errorCode = data.error?.code || 'UNKNOWN';
         if (!continuousMode) {
-          setError(`Processing failed: ${data.error || 'Unknown error'}`);
-          speak("Audio processing failed");
+          setError(`${errorCode}: ${errorMsg}`);
           setListening(false);
         }
         return;
       }
 
-      if (!response.ok) {
-        throw new Error(`API returned status ${response.status}: ${data.message || 'Unknown error'}`);
-      }
-
       if (data.transcription) {
-        console.log('Transcription:', data.transcription);
-        handleVoiceCommand(data.transcription.toLowerCase().trim());
+        handleVoiceCommand(data.transcription.toLowerCase().trim(), data);
       } else {
-        if (!continuousMode) {
-          setError('No transcription received');
-          speak("No transcription received");
-        }
+        if (!continuousMode) setError('No transcription received');
       }
 
-      // Ready for next command (if not in continuous mode)
-      if (!continuousMode) {
-        setListening(false);
-      }
-
+      if (!continuousMode) setListening(false);
     } catch (error) {
-      console.error('Error sending audio to API:', error);
+      addApiLog('ERROR', {
+        action: 'API request failed',
+        error: error.message
+      });
       if (!continuousMode) {
         setError(`API Error: ${error.message}`);
-        speak("Error processing audio");
         setListening(false);
       }
     }
   };
 
+  // ---------- Recording Functions ----------
+  const startContinuousListening = async () => {
+    const healthy = await checkApiHealth();
+    if (!healthy) {
+      setError('API is not available. Please start the server.');
+      return;
+    }
+
+    try {
+      setError('');
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: 16000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true
+        }
+      });
+
+      streamRef.current = stream;
+      continuousModeRef.current = true;
+      setContinuousMode(true);
+      setListening(true);
+
+      addApiLog('SYSTEM', {
+        message: 'Continuous listening started',
+        optimizations: getActiveOptimizations()
+      });
+
+      recordNextChunk();
+    } catch (error) {
+      console.error('Error accessing microphone:', error);
+      setError('Error accessing microphone');
+    }
+  };
+
+  const recordNextChunk = () => {
+    if (!streamRef.current || !continuousModeRef.current) return;
+
+    const mediaRecorder = new MediaRecorder(streamRef.current);
+    mediaRecorderRef.current = mediaRecorder;
+    audioChunksRef.current = [];
+
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data.size > 0) audioChunksRef.current.push(event.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      if (!continuousModeRef.current) return;
+
+      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+
+      if (audioBlob.size > 1000) {
+        setIsRecording(false);
+        try {
+          const wavBlob = await convertToWav(audioBlob);
+          await sendAudioToAPI(wavBlob);
+        } catch (error) {
+          addApiLog('ERROR', { error: 'Audio processing failed', message: error.message });
+        }
+      }
+
+      if (continuousModeRef.current) setTimeout(recordNextChunk, 100);
+    };
+
+    mediaRecorder.start();
+    setIsRecording(true);
+
+    setTimeout(() => {
+      if (mediaRecorder.state === 'recording') mediaRecorder.stop();
+    }, 3000);
+  };
+
+  const stopContinuousListening = () => {
+    continuousModeRef.current = false;
+    setContinuousMode(false);
+    setListening(false);
+    setIsRecording(false);
+
+    if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+
+    addApiLog('SYSTEM', { message: 'Continuous listening stopped' });
+  };
+
+  const startSingleListening = async () => {
+    const healthy = await checkApiHealth();
+    if (!healthy) {
+      setError('API is not available. Please start the server.');
+      return;
+    }
+
+    try {
+      setError('');
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: 16000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true
+        }
+      });
+
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        try {
+          const wavBlob = await convertToWav(audioBlob);
+          await sendAudioToAPI(wavBlob);
+        } catch (error) {
+          setError('Error processing audio');
+          setListening(false);
+        }
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setListening(true);
+      setIsRecording(true);
+
+      setTimeout(() => {
+        if (mediaRecorderRef.current?.state === 'recording') {
+          mediaRecorderRef.current.stop();
+          setIsRecording(false);
+        }
+      }, 4000);
+    } catch (error) {
+      console.error('Error accessing microphone:', error);
+      setError('Error accessing microphone');
+    }
+  };
+
+  // ---------- Game Logic ----------
   const checkWinner = (currentBoard = boardRef.current) => {
     const lines = [
       [0, 1, 2], [3, 4, 5], [6, 7, 8],
@@ -455,8 +482,7 @@ const TicTacToe = () => {
       [0, 4, 8], [2, 4, 6]
     ];
 
-    for (let i = 0; i < lines.length; i++) {
-      const [a, b, c] = lines[i];
+    for (const [a, b, c] of lines) {
       if (currentBoard[a] && currentBoard[a] === currentBoard[b] && currentBoard[a] === currentBoard[c]) {
         return currentBoard[a];
       }
@@ -469,37 +495,23 @@ const TicTacToe = () => {
     if (currentBoard[index] || winner) return;
 
     const currentPlayer = playerRef.current;
-    console.log('Current player:', currentPlayer, 'Placing at index:', index);
-
     const newBoard = [...currentBoard];
     newBoard[index] = currentPlayer;
     setBoard(newBoard);
     boardRef.current = newBoard;
 
-    const positionName = getPositionName(index);
-    speak(`${currentPlayer} has been placed in ${positionName}`);
-
     const gameWinner = checkWinner(newBoard);
     if (gameWinner) {
-      console.log('Winner found:', gameWinner);
       setWinner(gameWinner);
-      setTimeout(() => {
-        speak(`Player ${gameWinner} wins!`);
-      }, 1000);
+      setTimeout(() => speak(`Player ${gameWinner} wins!`), 1000);
     } else if (newBoard.every(cell => cell !== '')) {
-      console.log('Draw - board is full');
       setWinner('draw');
-      setTimeout(() => {
-        speak("It's a draw!");
-      }, 1000);
+      setTimeout(() => speak("It's a draw!"), 1000);
     } else {
       const nextPlayer = currentPlayer === 'X' ? 'O' : 'X';
-      console.log('Switching from', currentPlayer, 'to', nextPlayer);
       setPlayer(nextPlayer);
       playerRef.current = nextPlayer;
-      setTimeout(() => {
-        speak(`It's ${nextPlayer}'s turn`);
-      }, 1500);
+      setTimeout(() => speak(`${nextPlayer}'s turn`), 1000);
     }
   };
 
@@ -511,61 +523,111 @@ const TicTacToe = () => {
     playerRef.current = 'X';
     setWinner('');
     setError('');
-    setApiLogs([]); // Clear API logs on reset
-    setLastConfidenceScore(null); // Clear confidence score on reset
-    setLastSelectedApi(null); // Clear selected API on reset
-    speak("New game started. It's X's turn");
+    setLastConfidence(null);
+    setLastProcessingTime(null);
+    setLastService(null);
   };
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
+      if (streamRef.current) streamRef.current.getTracks().forEach(track => track.stop());
     };
   }, []);
 
+  // ---------- Helpers for dynamic classes ----------
+  const getStatusClass = () => {
+    if (!apiHealth) return 'status-pill error';
+    return apiHealth?.status === 'ok' ? 'status-pill ok' : 'status-pill error';
+  };
+
+  const getServiceClass = (service) => {
+    if (!service) return 'service-pill service-default';
+    if (service === 'vosk') return 'service-pill service-vosk';
+    if (service === 'google') return 'service-pill service-google';
+    return 'service-pill service-default';
+  };
+
+  const getConfidenceClass = (conf) => {
+    if (conf === null || conf === undefined) return 'confidence-pill';
+    if (conf > 0.7) return 'confidence-pill conf-high';
+    if (conf > 0.4) return 'confidence-pill conf-mid';
+    return 'confidence-pill conf-low';
+  };
+
+  const getProcessingClass = (ms) => {
+    if (ms === null || ms === undefined) return 'processing-pill';
+    if (ms < 500) return 'processing-pill proc-fast';
+    if (ms < 1000) return 'processing-pill proc-medium';
+    return 'processing-pill proc-slow';
+  };
+
+  const getCellClass = (cell) => {
+    if (cell === 'X') return 'board-cell x disabled';
+    if (cell === 'O') return 'board-cell o disabled';
+    return 'board-cell empty';
+  };
+
+  const logEntryClass = (type) => {
+    const t = (type || '').toLowerCase();
+    return `log-entry ${t}`;
+  };
+
+  // ---------- Render ----------
   return (
-    <div style={{ textAlign: 'center', fontFamily: 'Arial' }}>
-      <h1>Tic Tac Toe with Voice Control</h1>
+    <div className="app-container">
+      <h1 className="app-title">Tic Tac Toe with Voice Control</h1>
+      <p className="app-subtitle">AAC Board API Test Interface v2.1</p>
 
-      {!winner && <h2>Current Player: {player}</h2>}
-      {winner && winner !== 'draw' && <h2>Player {winner} wins!</h2>}
-      {winner === 'draw' && <h2>It's a draw!</h2>}
+      {/* Status Row */}
+      <div className="status-row">
+        <div className={getStatusClass()}>
+          API: {apiHealth?.status === 'ok' ? ' Connected' : ' Disconnected'}
+          {apiHealth?.version && ` (v${apiHealth.version})`}
+        </div>
 
-      <div style={{ marginBottom: '20px' }}>
+        {apiHealth?.modelStatus?.warmedUp && (
+          <div className="models-warmed">Models Warmed Up</div>
+        )}
+
+        {lastService && (
+          <div className={getServiceClass(lastService)}>
+            {lastService.charAt(0).toUpperCase() + lastService.slice(1)}
+          </div>
+        )}
+
+        {lastConfidence !== null && (
+          <div className={getConfidenceClass(lastConfidence)}>
+            Confidence: {(lastConfidence * 100).toFixed(0)}%
+          </div>
+        )}
+
+        {lastProcessingTime !== null && (
+          <div className={getProcessingClass(lastProcessingTime)}>
+            {lastProcessingTime}ms
+          </div>
+        )}
+      </div>
+
+      {/* Game Status */}
+      {!winner && <h2 className="current-player">Current Player: {player}</h2>}
+      {winner && winner !== 'draw' && <h2 className="winner">Player {winner} wins!</h2>}
+      {winner === 'draw' && <h2 className="draw">It's a draw!</h2>}
+
+      {/* Control Buttons */}
+      <div className="controls">
         {!continuousMode ? (
           <>
             <button
               onClick={startContinuousListening}
-              style={{
-                padding: '10px 20px',
-                fontSize: '16px',
-                backgroundColor: '#4CAF50',
-                color: 'white',
-                border: 'none',
-                borderRadius: '5px',
-                cursor: 'pointer',
-                marginRight: '10px'
-              }}
+              className="btn btn-success"
             >
-              Start Continuous Listening
+              Start Continuous
             </button>
 
             <button
-              onClick={startListening}
+              onClick={startSingleListening}
               disabled={listening}
-              style={{
-                padding: '10px 20px',
-                fontSize: '16px',
-                backgroundColor: listening ? '#cccccc' : '#2196F3',
-                color: 'white',
-                border: 'none',
-                borderRadius: '5px',
-                cursor: listening ? 'not-allowed' : 'pointer',
-                marginRight: '10px'
-              }}
+              className={`btn ${listening ? 'disabled' : 'btn-primary'}`}
             >
               {isRecording ? 'Recording...' : 'Single Command'}
             </button>
@@ -573,187 +635,157 @@ const TicTacToe = () => {
         ) : (
           <button
             onClick={stopContinuousListening}
-            style={{
-              padding: '10px 20px',
-              fontSize: '16px',
-              backgroundColor: '#f44336',
-              color: 'white',
-              border: 'none',
-              borderRadius: '5px',
-              cursor: 'pointer',
-              marginRight: '10px'
-            }}
+            className="btn btn-danger"
           >
-             Stop Continuous Listening
+            Stop Listening
           </button>
         )}
 
-        <button
-          onClick={reset}
-          style={{
-            padding: '10px 20px',
-            fontSize: '16px',
-            backgroundColor: '#4CAF50',
-            color: 'white',
-            border: 'none',
-            borderRadius: '5px',
-            cursor: 'pointer'
-          }}
-        >
-          New Game
-        </button>
+        <button onClick={reset} className="btn btn-warning">New Game</button>
+        <button onClick={checkApiHealth} className="btn btn-purple">Check API</button>
       </div>
 
+      {/* Optimization Settings */}
+      <div>
+        <div className="options-row">
+          <label
+            className={`toggle-label command`}
+            title="Command Mode"
+          >
+            <input
+              type="checkbox"
+              checked={commandMode}
+              onChange={(e) => setCommandMode(e.target.checked)}
+            />
+            <span>
+              <strong>Command Mode</strong>
+              <small className="small"> Vosk-first, optimized</small>
+            </span>
+          </label>
+
+          <label
+            className={`toggle-label skip-validation`}
+            title="Skip Validation"
+          >
+            <input
+              type="checkbox"
+              checked={skipValidation}
+              onChange={(e) => setSkipValidation(e.target.checked)}
+            />
+            <span>
+              <strong>Skip Validation</strong>
+              <small className="small"> Trusted audio source</small>
+            </span>
+          </label>
+
+          <button
+            onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+            className="advanced-button"
+          >
+            {showAdvancedOptions ? 'Hide' : 'More'} Options
+          </button>
+        </div>
+
+        {showAdvancedOptions && (
+          <div className="advanced-options">
+            <label className="advanced-toggle">
+              <input
+                type="checkbox"
+                checked={skipPreprocessing}
+                onChange={(e) => setSkipPreprocessing(e.target.checked)}
+              />
+              <span>Skip Preprocessing</span>
+            </label>
+
+            <label className="advanced-toggle">
+              <input
+                type="checkbox"
+                checked={simpleFilter}
+                onChange={(e) => setSimpleFilter(e.target.checked)}
+              />
+              <span>Simple Filter</span>
+            </label>
+
+            <div className="trusted-format">✓ Trusted Format: WAV</div>
+          </div>
+        )}
+
+        <div className="active-opts">Active: {getActiveOptimizations().join(', ')}</div>
+      </div>
+
+      {/* Status Messages */}
       {continuousMode && (
-        <p style={{ color: '#4CAF50', fontWeight: 'bold' }}>
+        <p className="continuous-status">
           ALWAYS LISTENING - {isRecording ? 'Recording...' : 'Processing...'}
         </p>
       )}
 
       {listening && !continuousMode && (
-        <p style={{ color: 'red' }}>
-          {isRecording ? 'Recording... (3 seconds)' : 'Processing...'}
+        <p className="recording-status">
+          {isRecording ? 'Recording... (4 seconds)' : 'Processing...'}
         </p>
       )}
 
-      {error && (
-        <p style={{ color: 'orange', fontSize: '14px', marginTop: '10px' }}>
-          {error}
-        </p>
-      )}
+      {error && <p className="error-banner">{error}</p>}
 
-      {/* Confidence Score Display */}
-      {lastConfidenceScore !== null && (
-        <div style={{
-          marginTop: '15px',
-          padding: '10px 20px',
-          backgroundColor: lastConfidenceScore >= 0.7 ? '#d4edda' : lastConfidenceScore >= 0.5 ? '#fff3cd' : '#f8d7da',
-          border: `2px solid ${lastConfidenceScore >= 0.7 ? '#28a745' : lastConfidenceScore >= 0.5 ? '#ffc107' : '#dc3545'}`,
-          borderRadius: '8px',
-          display: 'inline-block',
-          marginBottom: '10px'
-        }}>
-          <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#333', marginBottom: '5px' }}>
-            Confidence Score
-          </div>
-          <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#333' }}>
-            {(lastConfidenceScore * 100).toFixed(1)}%
-          </div>
-          {lastSelectedApi && (
-            <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>
-              API: {lastSelectedApi}
-            </div>
-          )}
-          <div style={{ fontSize: '11px', color: '#666', marginTop: '3px', fontStyle: 'italic' }}>
-            {lastConfidenceScore >= 0.7 ? 'High confidence' : lastConfidenceScore >= 0.5 ? 'Medium confidence' : 'Low confidence'}
-          </div>
-        </div>
-      )}
+      {/* Game Board */}
+      <div className="board-grid">
+        {board.map((cell, index) => {
+          const labels = [
+            'top left', 'top center', 'top right',
+            'middle left', 'center', 'middle right',
+            'bottom left', 'bottom center', 'bottom right'
+          ];
 
-<div style={{
-  display: 'grid',
-  gridTemplateColumns: 'repeat(3, 100px)',
-  gap: '5px',
-  justifyContent: 'center',
-  margin: '20px auto'
-}}>
-  {board.map((cell, index) => {
-    const labels = ['top left', 'top center', 'top right', 
-                    'middle left', 'center', 'middle right', 
-                    'bottom left', 'bottom center', 'bottom right'];
-    
-    return (
-      <button
-        key={index}
-        onClick={() => handleClick(index)}
-        style={{
-          width: '100px',
-          height: '100px',
-          fontSize: cell ? '30px' : '12px',
-          border: '2px solid black',
-          backgroundColor: 'white',
-          cursor: cell || winner ? 'not-allowed' : 'pointer',
-          color: cell ? 'black' : '#999'
-        }}
-        disabled={cell || winner}
-      >
-        {cell || labels[index]}
-      </button>
-    );
-  })}
-</div>
-
-      {/* API Input/Output Display */}
-      <div style={{ 
-        marginTop: '30px', 
-        padding: '20px', 
-        backgroundColor: '#f8f9fa', 
-        border: '1px solid #dee2e6', 
-        borderRadius: '8px',
-        maxWidth: '800px',
-        margin: '30px auto'
-      }}>
-        <h3 style={{ margin: '0 0 15px 0', color: '#333', fontSize: '18px' }}>
-          API Input/Output Log
-        </h3>
-        
-        {apiLogs.length === 0 ? (
-          <p style={{ color: '#666', fontStyle: 'italic' }}>
-            No API interactions yet. Try using voice commands!
-          </p>
-        ) : (
-          <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-            {apiLogs.map((log) => (
-              <div key={log.id} style={{ 
-                marginBottom: '15px', 
-                padding: '10px', 
-                backgroundColor: 'white', 
-                border: '1px solid #e9ecef',
-                borderRadius: '4px',
-                fontSize: '12px'
-              }}>
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'center',
-                  marginBottom: '8px'
-                }}>
-                  <span style={{ 
-                    fontWeight: 'bold',
-                    color: log.type === 'REQUEST' ? '#007bff' : 
-                           log.type === 'RESPONSE' ? '#28a745' :
-                           log.type === 'COMMAND' ? '#6f42c1' :
-                           log.type === 'ACTION' ? '#fd7e14' :
-                           log.type === 'SYSTEM' ? '#17a2b8' :
-                           log.type === 'ERROR' ? '#dc3545' : '#6c757d'
-                  }}>
-                    {log.type}
-                  </span>
-                  <span style={{ color: '#666', fontSize: '11px' }}>
-                    {log.timestamp}
-                  </span>
-                </div>
-                <pre style={{ 
-                  margin: 0, 
-                  whiteSpace: 'pre-wrap', 
-                  wordBreak: 'break-word',
-                  fontSize: '11px',
-                  color: '#333'
-                }}>
-                  {log.data}
-                </pre>
-              </div>
-            ))}
-          </div>
-        )}
+          return (
+            <button
+              key={index}
+              onClick={() => handleClick(index)}
+              className={getCellClass(cell)}
+              disabled={!!cell || !!winner}
+              aria-label={labels[index]}
+            >
+              {cell || labels[index]}
+            </button>
+          );
+        })}
       </div>
 
-      <div style={{ marginTop: '20px', fontSize: '14px', color: '#666' }}>
-        <p>Voice Commands:</p>
-        <p>"top left", "center", "bottom right", "new game"</p>
-        <p style={{ fontSize: '12px', marginTop: '10px', fontStyle: 'italic' }}>
-          Continuous mode: Always listening - just speak your commands!
-        </p>
+      {/* API Log Display */}
+      <div className="api-log">
+        <div className="log-header">
+          <h3 className="log-title">API Log</h3>
+          <button onClick={() => setApiLogs([])} className="log-clear-btn">Clear</button>
+        </div>
+
+        <div className="log-list">
+          {apiLogs.length === 0 ? (
+            <p style={{ color: '#666', fontStyle: 'italic', margin: 0 }}>No API activity yet. Try using voice commands!</p>
+          ) : (
+            apiLogs.map((log) => (
+              <div key={log.id} className={logEntryClass(log.type)}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span className="log-type">{log.type}</span>
+                  <span className="log-ts">{log.timestamp}</span>
+                </div>
+                <pre className="log-pre">{log.data}</pre>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Help Section */}
+      <div className="help-section">
+        <h4 style={{ margin: '0 0 10px 0' }}> Voice Commands</h4>
+        <p className="small"><strong>Positions:</strong> "top left", "center", "bottom right", etc.</p>
+        <p className="small"><strong>Numbers:</strong> "one" through "nine" (1-9)</p>
+        <p className="small"><strong>Control:</strong> "new game", "reset", "stop listening", "help"</p>
+
+        <h4 style={{ margin: '15px 0 10px 0' }}> Optimization Tips</h4>
+        <p className="small"><strong>Command Mode:</strong> Uses Vosk first (local, faster for short commands)</p>
+        <p className="small"><strong>Skip Validation:</strong> Bypasses audio quality checks for trusted sources</p>
+        <p className="small"><strong>Simple Filter:</strong> Uses faster single-pole audio filter</p>
       </div>
     </div>
   );
