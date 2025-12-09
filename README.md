@@ -21,6 +21,21 @@ A speech-to-text API designed for **AAC (Augmentative and Alternative Communicat
 
 ---
 
+## New Features Implemented in This Release
+
+- Offline speech recognition fallback using Vosk models  
+- AAC Command Mode for optimized short-utterance recognition  
+- Word-level confidence scoring and timing metadata  
+- Standardized camelCase JSON response formatting  
+- Consent-based logging layer for diagnostic analytics  
+- JavaScript game integration controller module  
+- Docusaurus-based documentation site and embedded demo  
+- Health reporting endpoint for service status visibility  
+- Configurable environment behavior for deployment flexibility  
+- Tic-Tac-Toe voice-controlled demonstration showcasing SDK usage  
+
+---
+
 ## Table of Contents
 
 - [Quick Start](#-quick-start)
@@ -531,6 +546,18 @@ transcribe('recording.wav', command_mode=True)
 
 ---
 
+## Known Bugs / Limitations in This Release
+
+- Speech accuracy may degrade under high background noise  
+- Offline model load may cause short delay during startup  
+- Voice command misclassification can occur when speaking rapidly  
+- Embedded Tic-Tac-Toe demo UI elements overlap on small screen sizes  
+- Logging may generate empty entries when consent header omitted  
+- Some AAC vocabulary categories are limited or minimally trained  
+- Offline model path configuration may require manual adjustment on Windows  
+
+---
+
 ##  Troubleshooting
 
 ### Common Issues
@@ -651,5 +678,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 <p align="center">
-  Made with ❤️ for the AAC community
+  [Giovanni Muniz] • [Andrew Blass] • [Eric Smith] • [Kieran Plenn] • [Mohammed Eisa] • [Shrikanth Srenivasan] 
 </p>
