@@ -1,8 +1,8 @@
-# 🚀 Deployment Guide - AAC API Project
+# Deployment Guide - AAC API Project
 
-## 📋 Pre-Deployment Checklist
+## Pre-Deployment Checklist
 
-### ✅ Prerequisites Verification
+### Prerequisites Verification
 - [ ] Node.js (v18+) installed
 - [ ] Python 3 (v3.7+) installed
 - [ ] Yarn or npm package manager
@@ -10,14 +10,14 @@
 - [ ] Microphone access enabled
 - [ ] Internet connection for speech recognition
 
-### ✅ Dependencies Installation
+### Dependencies Installation
 - [ ] API dependencies installed (`npm install`)
 - [ ] Documentation dependencies installed (`yarn install`)
 - [ ] Python dependencies installed (`pip3 install SpeechRecognition`)
 
 ---
 
-## 🚀 Quick Deployment (5 Minutes)
+## Quick Deployment (5 Minutes)
 
 ### **Step 1: Clone Repository**
 ```bash
@@ -341,7 +341,7 @@ server {
 
 ---
 
-## 📊 Performance Monitoring
+## Performance Monitoring
 
 ### **Health Checks**
 ```bash
@@ -422,4 +422,4 @@ pkill -f "docusaurus"
 
 ---
 
-**🎉 Deployment Complete! Your AAC API project is now ready for production use and user testing.**
+**Deployment Complete! Your AAC API project is now ready for production use and user testing.**

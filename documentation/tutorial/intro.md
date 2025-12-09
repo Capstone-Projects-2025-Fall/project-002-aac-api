@@ -152,4 +152,4 @@ Here's what's important in your documentation structure:
 - **Markdown guide**: See [Markdown Features](/tutorial/tutorial-basics/markdown-features)
 - **Docusaurus docs**: Visit [docusaurus.io](https://docusaurus.io/docs) for advanced features
 
-Happy documenting! 🚀
+Happy documenting!

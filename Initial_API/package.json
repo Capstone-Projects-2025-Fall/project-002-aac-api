@@ -1,14 +1,57 @@
 {
-  "name": "initial_api",
-  "version": "1.0.0",
+  "name": "aac-speech-recognition",
+  "version": "1.1.0",
+  "description": "Multi-API speech recognition library with confidence scoring for AAC applications",
   "main": "index.js",
+  "type": "commonjs",
+  "exports": {
+    ".": {
+      "node": "./index.js",
+      "default": "./index.js"
+    },
+    "./lib/speechRecognition": "./lib/speechRecognition.js",
+    "./server": "./server.js",
+    "./browser": {
+      "browser": "./browser.js",
+      "default": "./browser.js"
+    }
+  },
+  "browser": {
+    "./index.js": "./browser.js",
+    "./lib/speechRecognition.js": "./browser.js"
+  },
   "scripts": {
+    "start": "node index.js",
+    "server": "node server.js",
     "test": "jest"
   },
-  "keywords": [],
+  "keywords": [
+    "speech-recognition",
+    "speech-to-text",
+    "whisper",
+    "aac",
+    "accessibility",
+    "transcription",
+    "multi-api"
+  ],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Capstone-Projects-2025-Fall/project-002-aac-api.git",
+    "directory": "Initial_API"
+  },
+  "bugs": {
+    "url": "https://github.com/Capstone-Projects-2025-Fall/project-002-aac-api/issues"
+  },
+  "homepage": "https://github.com/Capstone-Projects-2025-Fall/project-002-aac-api/tree/library/Initial_API",
+  "files": [
+    "index.js",
+    "server.js",
+    "lib/",
+    "speech2.py",
+    "README.md"
+  ],
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^5.1.0",
@@ -17,5 +60,8 @@
   "devDependencies": {
     "jest": "^30.2.0",
     "supertest": "^7.1.4"
+  },
+  "engines": {
+    "node": ">=14.0.0"
   }
 }

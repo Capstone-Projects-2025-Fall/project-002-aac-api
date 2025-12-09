@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connect 4 - Voice Controlled</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .game-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .current-player {
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        .player-red {
+            color: #dc3545;
+        }
+
+        .player-yellow {
+            color: #ffc107;
+        }
+
+        .status {
+            font-size: 1.1em;
+            font-weight: bold;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .status.winner {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.draw {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .board-container {
+            display: flex;
+            justify-content: center;
+            margin: 30px 0;
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(7, 80px);
+            grid-template-rows: repeat(6, 80px);
+            gap: 5px;
+            background: #0066cc;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .cell {
+            width: 80px;
+            height: 80px;
+            background: white;
+            background-color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            border: 2px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .cell:hover:not(.filled) {
+            transform: scale(1.1);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .cell.red {
+            background: #dc3545 !important;
+            background-color: #dc3545 !important;
+            box-shadow: inset 0 5px 10px rgba(0, 0, 0, 0.3) !important;
+        }
+
+        .cell.yellow {
+            background: #ffc107 !important;
+            background-color: #ffc107 !important;
+            box-shadow: inset 0 5px 10px rgba(0, 0, 0, 0.3) !important;
+        }
+
+        .cell.filled {
+            cursor: not-allowed;
+        }
+
+        .cell.winning {
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .voice-controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 15px 30px;
+            font-size: 1.1em;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-listen {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-listen:hover:not(:disabled) {
+            background: #218838;
+        }
+
+        .btn-listen.recording {
+            background: #dc3545;
+            animation: pulse 1.5s infinite;
+        }
+
+        .btn-reset {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-reset:hover:not(:disabled) {
+            background: #5a6268;
+        }
+
+        .instructions {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border-left: 4px solid #0066cc;
+        }
+
+        .instructions h3 {
+            color: #0066cc;
+            margin-bottom: 10px;
+        }
+
+        .instructions ul {
+            margin-left: 20px;
+            color: #333;
+        }
+
+        .instructions li {
+            margin: 5px 0;
+        }
+
+        .confidence-display {
+            margin-top: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .confidence-high {
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .confidence-medium {
+            color: #ffc107;
+            font-weight: bold;
+        }
+
+        .confidence-low {
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        .last-input {
+            margin-top: 10px;
+            padding: 10px;
+            background: #fff3cd;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: bold;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 Connect 4</h1>
+        <p class="subtitle">Voice Controlled Game</p>
+
+        <div class="game-info">
+            <div>
+                <span class="current-player" id="currentPlayer">Current Player: <span class="player-red">Red</span></span>
+            </div>
+            <div class="status" id="status"></div>
+        </div>
+
+        <div class="board-container">
+            <div class="board" id="board"></div>
+        </div>
+
+        <div class="controls">
+            <div class="voice-controls">
+                <button id="listenBtn" class="btn-listen">🎤 Start Listening</button>
+                <button id="resetBtn" class="btn-reset">🔄 New Game</button>
+            </div>
+
+            <div id="confidenceDisplay" class="confidence-display" style="display: none;">
+                <div>Confidence: <span id="confidenceScore">-</span>%</div>
+                <div>API: <span id="selectedApi">-</span></div>
+            </div>
+
+            <div id="lastInput" class="last-input" style="display: none;">
+                Last input: <span id="lastInputText">-</span>
+            </div>
+        </div>
+
+        <div class="instructions">
+            <h3>How to Play:</h3>
+            <ul>
+                <li>Click "Start Listening" and say a number from <strong>1 to 7</strong></li>
+                <li>The number represents the column where you want to drop your chip</li>
+                <li>Red player goes first, then Yellow player</li>
+                <li>First player to get 4 chips in a row (horizontal, vertical, or diagonal) wins!</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8080/upload';
+        
+        let currentPlayer = 'red'; // 'red' or 'yellow' - Red always goes first
+        let board = Array(6).fill(null).map(() => Array(7).fill(null)); // 6 rows x 7 columns
+        let gameOver = false;
+        let isListening = false;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        
+        console.log('Game initialized - Red player goes first');
+
+        // Initialize board
+        function initBoard() {
+            const boardElement = document.getElementById('board');
+            if (!boardElement) {
+                console.error('Board element not found!');
+                return;
+            }
+            
+            boardElement.innerHTML = '';
+            
+            // Create cells in row-major order (row 0 to 5, col 0 to 6)
+            // This matches the board array structure
+            for (let row = 0; row < 6; row++) {
+                for (let col = 0; col < 7; col++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.row = row;
+                    cell.dataset.col = col;
+                    cell.style.background = 'white';
+                    cell.addEventListener('click', () => handleColumnClick(col));
+                    boardElement.appendChild(cell);
+                }
+            }
+            
+            console.log('Board initialized with', document.querySelectorAll('.cell').length, 'cells');
+        }
+
+        // Update current player display
+        function updatePlayerDisplay() {
+            const playerElement = document.getElementById('currentPlayer');
+            const colorClass = currentPlayer === 'red' ? 'player-red' : 'player-yellow';
+            playerElement.innerHTML = `Current Player: <span class="${colorClass}">${currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)}</span>`;
+        }
+
+        // Handle column click (manual play)
+        function handleColumnClick(col) {
+            if (gameOver) return;
+            dropChip(col);
+        }
+
+        // Drop chip in column
+        function dropChip(col) {
+            if (gameOver) {
+                console.log('Game is over, cannot drop chip');
+                return;
+            }
+            
+            if (col < 0 || col > 6) {
+                console.error('Invalid column:', col);
+                return;
+            }
+            
+            // Find the lowest empty cell in the column (start from bottom, row 5 is bottom)
+            let targetRow = -1;
+            for (let row = 5; row >= 0; row--) {
+                if (board[row][col] === null) {
+                    targetRow = row;
+                    break;
+                }
+            }
+            
+            if (targetRow === -1) {
+                // Column is full
+                alert(`Column ${col + 1} is full! Try another column.`);
+                return;
+            }
+            
+            // Place chip in the board with current player's color
+            const playerColor = currentPlayer; // 'red' or 'yellow'
+            board[targetRow][col] = playerColor;
+            console.log(`✅ ${playerColor.toUpperCase()} player dropped chip in column ${col + 1}, row ${targetRow + 1} (bottom row is 6)`);
+            
+            // Animate chip dropping
+            animateChipDrop(targetRow, col, playerColor);
+            
+            // Update board immediately to show the chip
+            updateBoard();
+            
+            // Check for win after a brief delay
+            setTimeout(() => {
+                // Check for win
+                if (checkWin(targetRow, col)) {
+                    gameOver = true;
+                    const winnerColor = playerColor.charAt(0).toUpperCase() + playerColor.slice(1);
+                    document.getElementById('status').textContent = `${winnerColor} wins!`;
+                    document.getElementById('status').className = 'status winner';
+                    highlightWinningCells(targetRow, col);
+                    return;
+                }
+                
+                // Check for draw
+                if (isBoardFull()) {
+                    gameOver = true;
+                    document.getElementById('status').textContent = "It's a draw!";
+                    document.getElementById('status').className = 'status draw';
+                    return;
+                }
+                
+                // Switch player for next turn
+                currentPlayer = currentPlayer === 'red' ? 'yellow' : 'red';
+                updatePlayerDisplay();
+                console.log(`🔄 Switched to ${currentPlayer.toUpperCase()} player's turn`);
+            }, 100);
+        }
+        
+        // Animate chip dropping from top to target position
+        function animateChipDrop(targetRow, col, player) {
+            const cells = document.querySelectorAll('.cell');
+            const targetCell = Array.from(cells).find(cell => 
+                parseInt(cell.dataset.row) === targetRow && 
+                parseInt(cell.dataset.col) === col
+            );
+            
+            if (!targetCell) {
+                console.error('Target cell not found for row', targetRow, 'col', col);
+                return;
+            }
+            
+            // Set the chip color immediately based on player with !important
+            if (player === 'red') {
+                targetCell.classList.add('red', 'filled');
+                targetCell.style.setProperty('background', '#dc3545', 'important');
+                targetCell.style.setProperty('background-color', '#dc3545', 'important');
+                targetCell.style.setProperty('box-shadow', 'inset 0 5px 10px rgba(0, 0, 0, 0.3)', 'important');
+                console.log('Applied RED color to target cell');
+            } else if (player === 'yellow') {
+                targetCell.classList.add('yellow', 'filled');
+                targetCell.style.setProperty('background', '#ffc107', 'important');
+                targetCell.style.setProperty('background-color', '#ffc107', 'important');
+                targetCell.style.setProperty('box-shadow', 'inset 0 5px 10px rgba(0, 0, 0, 0.3)', 'important');
+                console.log('Applied YELLOW color to target cell');
+            }
+            
+            // Visual feedback - pulse animation
+            targetCell.style.transform = 'scale(1.2)';
+            targetCell.style.transition = 'transform 0.2s ease-out';
+            
+            setTimeout(() => {
+                targetCell.style.transform = 'scale(1)';
+            }, 200);
+        }
+
+        // Update board display
+        function updateBoard() {
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach(cell => {
+                const row = parseInt(cell.dataset.row);
+                const col = parseInt(cell.dataset.col);
+                
+                if (row >= 0 && row < 6 && col >= 0 && col < 7) {
+                    const value = board[row][col];
+                    
+                    // Reset cell completely - remove all classes and styles
+                    cell.className = 'cell';
+                    cell.removeAttribute('style');
+                    
+                    // Apply player color if chip is present
+                    if (value === 'red') {
+                        cell.classList.add('red', 'filled');
+                        // Force red color with inline styles
+                        cell.style.setProperty('background', '#dc3545', 'important');
+                        cell.style.setProperty('background-color', '#dc3545', 'important');
+                        cell.style.setProperty('box-shadow', 'inset 0 5px 10px rgba(0, 0, 0, 0.3)', 'important');
+                        console.log(`Applied RED color to cell row ${row + 1}, col ${col + 1}`);
+                    } else if (value === 'yellow') {
+                        cell.classList.add('yellow', 'filled');
+                        // Force yellow color with inline styles
+                        cell.style.setProperty('background', '#ffc107', 'important');
+                        cell.style.setProperty('background-color', '#ffc107', 'important');
+                        cell.style.setProperty('box-shadow', 'inset 0 5px 10px rgba(0, 0, 0, 0.3)', 'important');
+                        console.log(`Applied YELLOW color to cell row ${row + 1}, col ${col + 1}`);
+                    } else {
+                        // Empty cell - white background
+                        cell.style.setProperty('background', 'white', 'important');
+                        cell.style.setProperty('background-color', 'white', 'important');
+                        cell.style.removeProperty('box-shadow');
+                    }
+                }
+            });
+            
+            console.log('Board updated. Current player:', currentPlayer);
+        }
+
+        // Check for win
+        function checkWin(row, col) {
+            const directions = [
+                [[0, 1], [0, -1]], // horizontal
+                [[1, 0], [-1, 0]], // vertical
+                [[1, 1], [-1, -1]], // diagonal /
+                [[1, -1], [-1, 1]] // diagonal \
+            ];
+
+            for (let direction of directions) {
+                let count = 1; // Count the current chip
+                
+                for (let [dx, dy] of direction) {
+                    let r = row + dx;
+                    let c = col + dy;
+                    
+                    while (r >= 0 && r < 6 && c >= 0 && c < 7 && board[r][c] === currentPlayer) {
+                        count++;
+                        r += dx;
+                        c += dy;
+                    }
+                }
+                
+                if (count >= 4) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+
+        // Highlight winning cells
+        function highlightWinningCells(row, col) {
+            // Simple implementation - highlight the winning row/column/diagonal
+            // For a full implementation, you'd track which cells are in the winning line
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach(cell => {
+                const r = parseInt(cell.dataset.row);
+                const c = parseInt(cell.dataset.col);
+                if (board[r][c] === currentPlayer) {
+                    cell.classList.add('winning');
+                }
+            });
+        }
+
+        // Check if board is full
+        function isBoardFull() {
+            return board[0].every(cell => cell !== null);
+        }
+
+        // Reset game
+        function resetGame() {
+            board = Array(6).fill(null).map(() => Array(7).fill(null));
+            currentPlayer = 'red';
+            gameOver = false;
+            updatePlayerDisplay();
+            document.getElementById('status').textContent = '';
+            document.getElementById('status').className = 'status';
+            document.getElementById('confidenceDisplay').style.display = 'none';
+            document.getElementById('lastInput').style.display = 'none';
+            initBoard();
+        }
+
+        // Start listening for voice input
+        async function startListening() {
+            if (gameOver) {
+                alert('Game is over! Click "New Game" to start a new game.');
+                return;
+            }
+
+            if (isListening) {
+                stopListening();
+                return;
+            }
+
+            isListening = true;
+            const listenBtn = document.getElementById('listenBtn');
+            listenBtn.textContent = '🛑 Stop Listening';
+            listenBtn.classList.add('recording');
+            listenBtn.disabled = false;
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // Try to use a format that works better with the API
+                const options = { mimeType: 'audio/webm;codecs=opus' };
+                if (MediaRecorder.isTypeSupported('audio/webm')) {
+                    mediaRecorder = new MediaRecorder(stream, options);
+                } else {
+                    mediaRecorder = new MediaRecorder(stream);
+                }
+                audioChunks = [];
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    // MediaRecorder creates webm/opus by default, but API needs WAV
+                    const mimeType = mediaRecorder.mimeType || 'audio/webm';
+                    const audioBlob = new Blob(audioChunks, { type: mimeType });
+                    console.log('Recording stopped, blob type:', mimeType, 'size:', audioBlob.size);
+                    
+                    try {
+                        // Convert to WAV format for the API
+                        console.log('Starting WAV conversion...');
+                        const wavBlob = await convertToWav(audioBlob);
+                        console.log('WAV conversion successful, sending to API...');
+                        await transcribeAudio(wavBlob);
+                    } catch (error) {
+                        console.error('Error in audio processing:', error);
+                        alert(`Error processing audio: ${error.message}. Please try again.`);
+                    } finally {
+                        stream.getTracks().forEach(track => track.stop());
+                    }
+                };
+
+                mediaRecorder.start();
+                
+                // Auto-stop after 3 seconds
+                setTimeout(() => {
+                    if (isListening) {
+                        stopListening();
+                    }
+                }, 3000);
+
+            } catch (error) {
+                console.error('Error accessing microphone:', error);
+                alert('Error accessing microphone. Please allow microphone access and try again.');
+                stopListening();
+            }
+        }
+
+        // Stop listening
+        function stopListening() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            isListening = false;
+            const listenBtn = document.getElementById('listenBtn');
+            listenBtn.textContent = '🎤 Start Listening';
+            listenBtn.classList.remove('recording');
+        }
+
+        // Convert audio blob to WAV format
+        async function convertToWav(audioBlob) {
+            console.log('Converting audio blob to WAV, original type:', audioBlob.type, 'size:', audioBlob.size);
+            
+            return new Promise((resolve, reject) => {
+                try {
+                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    const fileReader = new FileReader();
+                    
+                    fileReader.onload = async function(e) {
+                        try {
+                            console.log('Decoding audio data...');
+                            const audioBuffer = await audioContext.decodeAudioData(e.target.result);
+                            console.log('Audio decoded, converting to WAV...', {
+                                sampleRate: audioBuffer.sampleRate,
+                                channels: audioBuffer.numberOfChannels,
+                                duration: audioBuffer.duration
+                            });
+                            
+                            const wav = audioBufferToWav(audioBuffer);
+                            const wavBlob = new Blob([wav], { type: 'audio/wav' });
+                            console.log('WAV conversion complete, size:', wavBlob.size);
+                            resolve(wavBlob);
+                        } catch (error) {
+                            console.error('Error converting audio:', error);
+                            alert(`Audio conversion failed: ${error.message}. The game may not work properly.`);
+                            reject(error);
+                        }
+                    };
+                    
+                    fileReader.onerror = function(error) {
+                        console.error('FileReader error:', error);
+                        reject(new Error('Failed to read audio file'));
+                    };
+                    
+                    fileReader.readAsArrayBuffer(audioBlob);
+                } catch (error) {
+                    console.error('Error setting up conversion:', error);
+                    reject(error);
+                }
+            });
+        }
+
+        // Convert AudioBuffer to WAV format
+        function audioBufferToWav(buffer) {
+            const length = buffer.length;
+            const numberOfChannels = buffer.numberOfChannels;
+            const sampleRate = buffer.sampleRate;
+            const bytesPerSample = 2;
+            const blockAlign = numberOfChannels * bytesPerSample;
+            const byteRate = sampleRate * blockAlign;
+            const dataSize = length * blockAlign;
+            const bufferSize = 44 + dataSize;
+            const arrayBuffer = new ArrayBuffer(bufferSize);
+            const view = new DataView(arrayBuffer);
+            
+            // WAV header
+            const writeString = (offset, string) => {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            };
+            
+            writeString(0, 'RIFF');
+            view.setUint32(4, bufferSize - 8, true);
+            writeString(8, 'WAVE');
+            writeString(12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, numberOfChannels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, byteRate, true);
+            view.setUint16(32, blockAlign, true);
+            view.setUint16(34, 16, true);
+            writeString(36, 'data');
+            view.setUint32(40, dataSize, true);
+            
+            // Convert float samples to 16-bit PCM
+            let offset = 44;
+            for (let i = 0; i < length; i++) {
+                for (let channel = 0; channel < numberOfChannels; channel++) {
+                    const sample = Math.max(-1, Math.min(1, buffer.getChannelData(channel)[i]));
+                    view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+                    offset += 2;
+                }
+            }
+            
+            return arrayBuffer;
+        }
+
+        // Transcribe audio using the API
+        async function transcribeAudio(audioBlob) {
+            try {
+                // Verify blob type
+                console.log('Sending to API - blob type:', audioBlob.type, 'size:', audioBlob.size);
+                
+                // Ensure filename is .wav
+                const formData = new FormData();
+                formData.append('audioFile', audioBlob, 'recording.wav');
+
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'x-logging-consent': 'true'
+                    }
+                });
+
+                const data = await response.json();
+                
+                console.log('API Response:', data); // Debug log
+
+                // Display confidence score
+                if (data.confidenceScore !== null && data.confidenceScore !== undefined) {
+                    const confidenceDisplay = document.getElementById('confidenceDisplay');
+                    confidenceDisplay.style.display = 'block';
+                    
+                    const confidenceScore = document.getElementById('confidenceScore');
+                    const confidencePercent = (data.confidenceScore * 100).toFixed(1);
+                    confidenceScore.textContent = confidencePercent + '%';
+                    confidenceScore.className = data.confidenceScore >= 0.7 ? 'confidence-high' : 
+                                                data.confidenceScore >= 0.5 ? 'confidence-medium' : 'confidence-low';
+                    
+                    document.getElementById('selectedApi').textContent = data.selectedApi || 'unknown';
+                }
+
+                // Check for errors first
+                if (data.error) {
+                    console.error('API Error:', data.error);
+                    alert(`Error: ${data.error.message || data.error.code || 'Unknown error'}. Please try again.`);
+                    return;
+                }
+
+                // Check if transcription succeeded
+                if (data.success && data.transcription) {
+                    const transcription = data.transcription.trim().toLowerCase();
+                    
+                    // Display last input
+                    const lastInput = document.getElementById('lastInput');
+                    lastInput.style.display = 'block';
+                    document.getElementById('lastInputText').textContent = transcription;
+
+                    // Extract number from transcription
+                    const number = extractNumber(transcription);
+                    
+                    if (number !== null && number >= 1 && number <= 7) {
+                        const col = number - 1; // Convert to 0-indexed
+                        dropChip(col);
+                    } else {
+                        alert(`I heard "${transcription}". Please say a number from 1 to 7.`);
+                    }
+                } else if (data.transcription) {
+                    // Sometimes transcription exists but success is false
+                    const transcription = data.transcription.trim().toLowerCase();
+                    const lastInput = document.getElementById('lastInput');
+                    lastInput.style.display = 'block';
+                    document.getElementById('lastInputText').textContent = transcription;
+                    
+                    const number = extractNumber(transcription);
+                    if (number !== null && number >= 1 && number <= 7) {
+                        const col = number - 1;
+                        dropChip(col);
+                    } else {
+                        alert(`I heard "${transcription}". Please say a number from 1 to 7.`);
+                    }
+                } else {
+                    // Show more detailed error message
+                    const errorMsg = data.error ? 
+                        `Error: ${data.error.message || data.error.code}` : 
+                        'Could not understand audio. Please try speaking more clearly.';
+                    alert(errorMsg);
+                    console.error('Transcription failed:', data);
+                }
+
+            } catch (error) {
+                console.error('Error transcribing audio:', error);
+                alert(`Error connecting to speech recognition server: ${error.message}\n\nMake sure the server is running on http://localhost:8080`);
+            }
+        }
+
+        // Extract number from transcription
+        function extractNumber(text) {
+            // Remove common words and extract digits
+            const cleaned = text.replace(/[^0-9]/g, '');
+            if (cleaned.length > 0) {
+                const num = parseInt(cleaned);
+                return num;
+            }
+            
+            // Try word-to-number conversion
+            const wordToNumber = {
+                'one': 1, 'two': 2, 'three': 3, 'four': 4,
+                'five': 5, 'six': 6, 'seven': 7
+            };
+            
+            for (let word in wordToNumber) {
+                if (text.includes(word)) {
+                    return wordToNumber[word];
+                }
+            }
+            
+            return null;
+        }
+
+        // Event listeners - wait for DOM to be ready
+        document.addEventListener('DOMContentLoaded', function() {
+            const listenBtn = document.getElementById('listenBtn');
+            const resetBtn = document.getElementById('resetBtn');
+            
+            if (listenBtn) {
+                listenBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    console.log('Listen button clicked');
+                    startListening();
+                });
+            } else {
+                console.error('Listen button not found!');
+            }
+            
+            if (resetBtn) {
+                resetBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    console.log('Reset button clicked');
+                    resetGame();
+                });
+            } else {
+                console.error('Reset button not found!');
+            }
+
+            // Initialize game
+            initBoard();
+            updatePlayerDisplay();
+            console.log('Game initialized');
+        });
+    </script>
+</body>
+</html>
+

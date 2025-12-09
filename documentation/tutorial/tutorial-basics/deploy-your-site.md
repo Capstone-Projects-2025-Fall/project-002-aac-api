@@ -90,4 +90,4 @@ The GitHub Actions workflow:
 4. **Builds the static site** with production optimizations
 5. **Deploys to GitHub Pages** using the built-in GitHub token
 
-No manual deployment steps needed - just push your changes! 🚀
+No manual deployment steps needed - just push your changes!
