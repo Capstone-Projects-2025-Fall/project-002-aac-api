@@ -3,6 +3,10 @@
 
 # Node modules
 node_modules/
+<<<<<<<<< Temporary merge branch 1
+=========
+**/node_modules/
+>>>>>>>>> Temporary merge branch 2
 
 # Misc
 .DS_Store

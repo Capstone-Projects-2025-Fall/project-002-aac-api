@@ -3,7 +3,7 @@ title: Mermaid Diagrams (UML)
 sidebar_position: 5
 ---
 
-# Mermaid Diagrams (UML) 🧜‍♀️
+# Mermaid Diagrams (UML)
 Using [Mermaid](https://mermaid-js.github.io/mermaid/#/) to create diagrams and visualizations directly in Docusaurus offers significant advantages over static images. With Mermaid, your diagrams are written as code, making them easy to version control, review, and update alongside your documentation. This approach ensures your diagrams always stay in sync with your project, reduces maintenance overhead, and eliminates the hassle of regenerating and uploading new images for every change. As your project evolves, updating a diagram is as simple as editing a few lines of text, making your documentation more agile, consistent, and future-proof.
 Mermaid supports a variety of diagram types, including flowcharts, sequence diagrams, class diagrams, state diagrams, and more. Below are some examples of how to create different types of UML diagrams using Mermaid syntax.
 
