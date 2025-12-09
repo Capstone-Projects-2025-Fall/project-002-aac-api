@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import './TicTacToe.css';
 
 const TicTacToe = () => {
   const [board, setBoard] = useState(['', '', '', '', '', '', '', '', '']);
@@ -162,7 +163,6 @@ const TicTacToe = () => {
     }
 
     if (position !== undefined) {
-      console.log('Moving to position:', position, 'Current player:', playerRef.current);
       addApiLog('ACTION', {
         action: 'place_mark',
         position: position,
@@ -218,7 +218,6 @@ const TicTacToe = () => {
 
       // Start the recording cycle
       recordNextChunk();
-
     } catch (error) {
       console.error('Error accessing microphone:', error);
       setError('Error accessing microphone');
@@ -228,18 +227,14 @@ const TicTacToe = () => {
 
   // Record and process audio chunks continuously
   const recordNextChunk = () => {
-    if (!streamRef.current || !continuousModeRef.current) {
-      return;
-    }
+    if (!streamRef.current || !continuousModeRef.current) return;
 
     const mediaRecorder = new MediaRecorder(streamRef.current);
     mediaRecorderRef.current = mediaRecorder;
     audioChunksRef.current = [];
 
     mediaRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        audioChunksRef.current.push(event.data);
-      }
+      if (event.data.size > 0) audioChunksRef.current.push(event.data);
     };
 
     mediaRecorder.onstop = async () => {
@@ -278,9 +273,7 @@ const TicTacToe = () => {
 
     // Record for 3 seconds then process
     setTimeout(() => {
-      if (mediaRecorder.state === 'recording') {
-        mediaRecorder.stop();
-      }
+      if (mediaRecorder.state === 'recording') mediaRecorder.stop();
     }, 3000);
   };
 
@@ -319,20 +312,16 @@ const TicTacToe = () => {
       audioChunksRef.current = [];
 
       mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
       };
 
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-
         try {
           // Convert to WAV
           const wavBlob = await convertToWav(audioBlob);
           await sendAudioToAPI(wavBlob);
         } catch (error) {
-          console.error('Error processing audio:', error);
           setError('Error processing audio');
           speak("Error processing audio");
           setListening(false);
@@ -517,12 +506,9 @@ const TicTacToe = () => {
     speak("New game started. It's X's turn");
   };
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
+      if (streamRef.current) streamRef.current.getTracks().forEach(track => track.stop());
     };
   }, []);
 

@@ -2,16 +2,8 @@
 AAC Board Speech Recognition Module
 ===================================
 Optimized speech recognition for AAC (Augmentative and Alternative Communication) devices.
-
-Features:
-- Multiple recognition backends (Google, Vosk offline)
-- Command mode with limited vocabulary for faster recognition
-- Word-level timing information
-- Standardized camelCase JSON responses
-- Audio quality validation
-- Optimized for low-latency AAC interactions
-
-Author: Gio, improvements for AAC optimization
+This module provides audio preprocessing, format detection, quality validation, and
+integration with multiple speech recognition services (Vosk offline and Google online)
 """
 
 import speech_recognition as sr
@@ -25,31 +17,37 @@ import audioop
 import os
 import time
 from typing import Optional, Dict, List, Any, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
 
 # Vosk imports
 vosk = None
 VOSK_MODEL = None  # Store loaded model globally
-vosk_model_path = os.environ.get('VOSK_MODEL_PATH', 'model/vosk-model-small-en-us-0.15') # Path to Vosk model
+vosk_model_path = os.environ.get('VOSK_MODEL_PATH', 'model/vosk-model-small-en-us-0.15')
+
+# =============================================================================
+# Cached State for Latency Reduction
+# =============================================================================
+
+_cached_energy_threshold: Optional[float] = None
+_energy_threshold_lock = False  # Simple flag to prevent race conditions
 
 # =============================================================================
 # AAC Command Configuration
 # =============================================================================
 
-# Common AAC commands for command mode recognition
 AAC_COMMANDS = [
     # Navigation
     "yes", "no", "help", "back", "next", "previous", "home", "menu", "exit", "stop",
     # Selection
-    "select", "choose", "pick", "open", "close", "cancel", "confirm", "delete", "this"
+    "select", "choose", "pick", "open", "close", "cancel", "confirm", "delete", "this",
     # Communication
     "hello", "goodbye", "thank you", "please", "sorry", "wait", "more", "done",
     # Actions
-    "play", "pause", "repeat", "louder", "quieter", "up", "down", "left", "right", "top"
+    "play", "pause", "repeat", "louder", "quieter", "up", "down", "left", "right", "top",
     # Game Actions
     "center", "middle right", "middle left", "bottom right", "bottom center", "bottom left", "top left", "top center", "top right"
 ]
 
-# Command categories for response classification
 COMMAND_CATEGORIES = {
     "navigation": ["back", "next", "previous", "home", "menu", "exit", "up", "down", "left", "right"],
     "selection": ["select", "choose", "pick", "open", "close", "cancel", "confirm", "delete", "yes", "no"],
@@ -57,7 +55,6 @@ COMMAND_CATEGORIES = {
     "media": ["play", "pause", "stop", "repeat", "louder", "quieter"]
 }
 
-# Supported audio formats with optimal settings
 SUPPORTED_FORMATS = {
     "WAV": {"extensions": [".wav"], "optimal_sample_rate": 16000, "optimal_bit_depth": 16},
     "MP3": {"extensions": [".mp3"], "optimal_sample_rate": 16000, "optimal_bit_depth": 16},
@@ -72,25 +69,16 @@ SUPPORTED_FORMATS = {
 # =============================================================================
 
 def load_vosk_model(model_path: str) -> Optional[Any]:
-    """
-    Load Vosk model for offline recognition.
-    
-    Args:
-        model_path: Path to the Vosk model directory
-        
-    Returns:
-        Loaded Vosk model or None if loading fails
-    """
+    """Load Vosk model for offline recognition."""
     global vosk, VOSK_MODEL
 
-    # Return cached model if already loaded
     if VOSK_MODEL is not None:
         return VOSK_MODEL
 
     try:
         import vosk as vosk_module
         vosk = vosk_module
-        vosk.SetLogLevel(-1)  # Reduce Vosk logging noise
+        vosk.SetLogLevel(-1)
         
         if not os.path.exists(model_path):
             log_debug(f"Vosk model not found at {model_path}")
@@ -116,27 +104,20 @@ def get_model_status() -> Dict[str, Any]:
     return {
         "voskLoaded": VOSK_MODEL is not None,
         "voskModelPath": vosk_model_path,
-        "voskAvailable": vosk is not None
+        "voskAvailable": vosk is not None,
+        "cachedEnergyThreshold": _cached_energy_threshold
     }
 
 
 def warm_up_models() -> Dict[str, bool]:
-    """
-    Warm up recognition models to reduce first-request latency.
-    Call this on server startup.
-    
-    Returns:
-        Dictionary with warm-up status for each model
-    """
+    """Warm up recognition models to reduce first-request latency."""
     results = {"vosk": False}
     
-    # Warm up Vosk
     model = load_vosk_model(vosk_model_path)
     if model is not None:
         try:
-            # Create a short silent audio to initialize recognizer
             sample_rate = 16000
-            silent_audio = bytes(sample_rate * 2)  # 1 second of silence (16-bit)
+            silent_audio = bytes(sample_rate * 2)
             rec = vosk.KaldiRecognizer(model, sample_rate)
             rec.AcceptWaveform(silent_audio)
             rec.FinalResult()
@@ -146,6 +127,12 @@ def warm_up_models() -> Dict[str, bool]:
             log_debug(f"Vosk warm-up failed: {e}")
     
     return results
+
+
+def reset_cached_state():
+    """Reset cached state (useful for testing or environment changes)."""
+    global _cached_energy_threshold
+    _cached_energy_threshold = None
 
 
 # =============================================================================
@@ -162,15 +149,7 @@ def log_debug(message: str) -> None:
 # =============================================================================
 
 def detect_audio_format(audio_bytes: bytes) -> str:
-    """
-    Detect audio format from byte stream.
-    
-    Args:
-        audio_bytes: Raw audio bytes
-        
-    Returns:
-        Format string (WAV, MP3, FLAC, OGG, or UNKNOWN)
-    """
+    """Detect audio format from byte stream."""
     if len(audio_bytes) < 12:
         return 'UNKNOWN'
     
@@ -187,15 +166,7 @@ def detect_audio_format(audio_bytes: bytes) -> str:
 
 
 def get_wav_metadata(audio_file: io.BytesIO) -> Dict[str, Any]:
-    """
-    Extract metadata from WAV audio file.
-    
-    Args:
-        audio_file: BytesIO object containing WAV data
-        
-    Returns:
-        Dictionary with audio metadata
-    """
+    """Extract metadata from WAV audio file."""
     metadata = {}
     try:
         audio_file.seek(0)
@@ -218,50 +189,58 @@ def get_wav_metadata(audio_file: io.BytesIO) -> Dict[str, Any]:
     return metadata
 
 
-def preprocess_audio(recognizer: sr.Recognizer, audio: sr.AudioData) -> sr.AudioData:
+def preprocess_audio(
+    recognizer: sr.Recognizer, 
+    audio: sr.AudioData, 
+    apply_filter: bool = True,
+    use_simple_filter: bool = False
+) -> sr.AudioData:
     """
     Preprocess audio data for better recognition in AAC context.
-    
-    Applies high-pass filter to remove low-frequency noise common in
-    AAC device environments (HVAC, motor noise, etc.)
     
     Args:
         recognizer: SpeechRecognition Recognizer instance
         audio: AudioData to preprocess
-        
-    Returns:
-        Preprocessed AudioData
+        apply_filter: If False, skip filtering entirely (fastest)
+        use_simple_filter: If True, use faster single-pole filter instead of Butterworth
     """
+    if not apply_filter:
+        return audio
+    
     try:
-        # Convert to numpy array for processing
-        raw_data = np.frombuffer(audio.frame_data, np.int16)
+        raw_data = np.frombuffer(audio.frame_data, np.int16).astype(np.float64)
         
         if len(raw_data) == 0:
             return audio
         
-        # Apply high-pass filter to remove low frequency noise
-        nyquist = audio.sample_rate / 2
-        low_cutoff = 80  # Remove frequencies below 80Hz (common noise floor)
-        normal_cutoff = low_cutoff / nyquist
-        
-        # Check if cutoff is valid
-        if normal_cutoff >= 1.0 or normal_cutoff <= 0:
-            log_debug("Warning: Invalid cutoff frequency, skipping filter")
-            return audio
-        
-        # Design and apply Butterworth high-pass filter
-        b, a = signal.butter(4, normal_cutoff, btype='high', analog=False)
-        filtered_data = signal.filtfilt(b, a, raw_data)
+        if use_simple_filter:
+            # Simple single-pole high-pass filter (much faster)
+            # y[n] = alpha * (y[n-1] + x[n] - x[n-1])
+            alpha = 0.98  # Cutoff ~80Hz at 16kHz sample rate
+            filtered_data = np.zeros_like(raw_data)
+            filtered_data[0] = raw_data[0]
+            for i in range(1, len(raw_data)):
+                filtered_data[i] = alpha * (filtered_data[i-1] + raw_data[i] - raw_data[i-1])
+        else:
+            # Full Butterworth filter (more accurate but slower)
+            nyquist = audio.sample_rate / 2
+            low_cutoff = 80
+            normal_cutoff = low_cutoff / nyquist
+            
+            if normal_cutoff >= 1.0 or normal_cutoff <= 0:
+                log_debug("Warning: Invalid cutoff frequency, skipping filter")
+                return audio
+            
+            b, a = signal.butter(4, normal_cutoff, btype='high', analog=False)
+            filtered_data = signal.filtfilt(b, a, raw_data)
 
-        # Normalize audio to prevent clipping
+        # Normalize audio
         max_val = np.max(np.abs(filtered_data))
         if max_val > 0:
             filtered_data = filtered_data * (32767 * 0.9 / max_val)
 
-        # Ensure data is in valid range
         filtered_data = np.clip(filtered_data, -32768, 32767)
 
-        # Create new AudioData with processed audio
         processed_audio = sr.AudioData(
             filtered_data.astype(np.int16).tobytes(),
             audio.sample_rate,
@@ -274,24 +253,44 @@ def preprocess_audio(recognizer: sr.Recognizer, audio: sr.AudioData) -> sr.Audio
         return audio
 
 
-def adjust_ambient_noise(recognizer: sr.Recognizer, source: sr.AudioSource, duration: float = 0.3) -> None:
+def adjust_ambient_noise(
+    recognizer: sr.Recognizer, 
+    source: sr.AudioSource, 
+    duration: float = 0.3,
+    use_cached: bool = True
+) -> None:
     """
     Adjust for ambient noise in the audio source.
-    Uses shorter duration for faster AAC response times.
-    
-    Args:
-        recognizer: SpeechRecognition Recognizer instance
-        source: Audio source to calibrate
-        duration: Calibration duration in seconds (default 0.3 for AAC speed)
+    Uses cached threshold when available for faster response.
     """
+    global _cached_energy_threshold, _energy_threshold_lock
+    
+    # Use cached threshold if available and requested
+    if use_cached and _cached_energy_threshold is not None:
+        recognizer.energy_threshold = _cached_energy_threshold
+        log_debug(f"Using cached energy threshold: {_cached_energy_threshold}")
+        return
+    
     try:
         recognizer.adjust_for_ambient_noise(source, duration=min(duration, 0.5))
+        
+        # Cache the threshold for future use
+        if not _energy_threshold_lock:
+            _energy_threshold_lock = True
+            _cached_energy_threshold = recognizer.energy_threshold
+            _energy_threshold_lock = False
+            log_debug(f"Cached energy threshold: {_cached_energy_threshold}")
+            
     except Exception:
-        # If calibration fails, use optimized default for AAC devices
         recognizer.energy_threshold = 350
 
 
-def validate_audio_quality(audio: sr.AudioData, sample_rate: int, duration: float) -> Dict[str, Any]:
+def validate_audio_quality(
+    audio: sr.AudioData, 
+    sample_rate: int, 
+    duration: float,
+    strict: bool = True
+) -> Dict[str, Any]:
     """
     Validate audio quality for AAC context.
     
@@ -299,36 +298,37 @@ def validate_audio_quality(audio: sr.AudioData, sample_rate: int, duration: floa
         audio: AudioData to validate
         sample_rate: Audio sample rate
         duration: Audio duration in seconds
-        
-    Returns:
-        Dictionary with validation results
+        strict: If False, only check critical issues (faster)
     """
     issues = []
     warnings = []
 
-    # Check duration
+    # Critical checks (always performed)
     if duration < 0.1:
         issues.append("Audio too short (< 0.1s)")
-    elif duration < 0.3:
-        warnings.append("Audio may be too short for reliable recognition")
-    elif duration > 30:
-        warnings.append("Long audio may increase processing time")
     
-    # Check if audio has content (not silent)
+    # Check if audio has content
     try:
         rms = audioop.rms(audio.frame_data, audio.sample_width)
         if rms < 50:
             issues.append("Audio appears silent or nearly silent")
-        elif rms < 200:
+        elif strict and rms < 200:
             warnings.append("Audio volume is low")
     except Exception:
-        warnings.append("Could not analyze audio volume")
+        if strict:
+            warnings.append("Could not analyze audio volume")
     
-    # Check sample rate
-    if sample_rate < 8000:
-        issues.append("Sample rate too low (< 8kHz)")
-    elif sample_rate < 16000:
-        warnings.append("Sample rate below optimal (16kHz recommended)")
+    # Non-critical checks (skip in fast mode)
+    if strict:
+        if duration < 0.3:
+            warnings.append("Audio may be too short for reliable recognition")
+        elif duration > 30:
+            warnings.append("Long audio may increase processing time")
+        
+        if sample_rate < 8000:
+            issues.append("Sample rate too low (< 8kHz)")
+        elif sample_rate < 16000:
+            warnings.append("Sample rate below optimal (16kHz recommended)")
     
     return {
         "valid": len(issues) == 0,
@@ -341,18 +341,12 @@ def validate_audio_quality(audio: sr.AudioData, sample_rate: int, duration: floa
 # Speech Recognition
 # =============================================================================
 
-def recognize_vosk(audio_data: sr.AudioData, model: Any, command_mode: bool = False) -> Tuple[str, float, Dict]:
-    """
-    Recognize speech using Vosk offline model.
-    
-    Args:
-        audio_data: AudioData to recognize
-        model: Loaded Vosk model
-        command_mode: If True, use limited AAC command vocabulary
-        
-    Returns:
-        Tuple of (transcription, confidence, full_result)
-    """
+def recognize_vosk(
+    audio_data: sr.AudioData, 
+    model: Any, 
+    command_mode: bool = False
+) -> Tuple[str, float, Dict]:
+    """Recognize speech using Vosk offline model."""
     if vosk is None or model is None:
         raise RuntimeError("Vosk model is not loaded")
 
@@ -360,7 +354,6 @@ def recognize_vosk(audio_data: sr.AudioData, model: Any, command_mode: bool = Fa
     rec.SetMaxAlternatives(3)
     rec.SetWords(True)
     
-    # Apply command grammar if in command mode
     if command_mode:
         grammar = json.dumps(AAC_COMMANDS)
         try:
@@ -369,19 +362,23 @@ def recognize_vosk(audio_data: sr.AudioData, model: Any, command_mode: bool = Fa
         except Exception as e:
             log_debug(f"Failed to set command grammar: {e}")
 
-    # Process audio in chunks for better streaming compatibility
-    chunk_size = 4000
     audio_bytes = audio_data.frame_data
+    audio_length = len(audio_bytes)
     
-    for i in range(0, len(audio_bytes), chunk_size):
-        chunk = audio_bytes[i:i+chunk_size]
-        rec.AcceptWaveform(chunk)
+    # Adaptive chunk size based on audio length
+    # For short audio (< 1 second at 16kHz, 16-bit), process all at once
+    if audio_length < audio_data.sample_rate * 2:
+        rec.AcceptWaveform(audio_bytes)
+    else:
+        # Use larger chunks for longer audio
+        chunk_size = 8000  # Increased from 4000
+        for i in range(0, audio_length, chunk_size):
+            chunk = audio_bytes[i:i+chunk_size]
+            rec.AcceptWaveform(chunk)
 
-    # Finalize recognition
     result = json.loads(rec.FinalResult())
     text = result.get('text', '').strip()
 
-    # Calculate confidence
     confidence = 0.5
     if 'alternatives' in result and result['alternatives']:
         confidence = result['alternatives'][0].get('confidence', 0.5)
@@ -393,16 +390,59 @@ def recognize_vosk(audio_data: sr.AudioData, model: Any, command_mode: bool = Fa
     return text, confidence, result
 
 
-def classify_command(text: str) -> Optional[str]:
-    """
-    Classify recognized text into AAC command category.
-    
-    Args:
-        text: Recognized text
+def try_google_recognition(recognizer: sr.Recognizer, audio: sr.AudioData) -> Dict[str, Any]:
+    """Attempt Google Speech Recognition (for parallel execution)."""
+    try:
+        start_time = time.time()
+        text = recognizer.recognize_google(audio, show_all=False)
+        processing_time = int((time.time() - start_time) * 1000)
+        return {
+            "success": True,
+            "text": text,
+            "service": "google",
+            "confidence": 0.85,
+            "processingTime": processing_time
+        }
+    except sr.UnknownValueError:
+        return {"success": False, "service": "google", "error": "Could not understand audio"}
+    except sr.RequestError as e:
+        return {"success": False, "service": "google", "error": str(e)}
+    except Exception as e:
+        return {"success": False, "service": "google", "error": str(e)}
+
+
+def try_vosk_recognition(audio: sr.AudioData, command_mode: bool = False) -> Dict[str, Any]:
+    """Attempt Vosk recognition (for parallel execution)."""
+    try:
+        start_time = time.time()
+        model = load_vosk_model(vosk_model_path)
         
-    Returns:
-        Command category or None if not a recognized command
-    """
+        if model is None:
+            return {"success": False, "service": "vosk", "error": "Vosk model not available"}
+        
+        text, confidence, full_result = recognize_vosk(audio, model, command_mode)
+        processing_time = int((time.time() - start_time) * 1000)
+        
+        if text:
+            word_timing = extract_word_timing(full_result)
+            return {
+                "success": True,
+                "text": text,
+                "service": "vosk",
+                "confidence": confidence,
+                "processingTime": processing_time,
+                "wordTiming": word_timing,
+                "fullResult": full_result
+            }
+        else:
+            return {"success": False, "service": "vosk", "error": "Could not understand audio"}
+            
+    except Exception as e:
+        return {"success": False, "service": "vosk", "error": str(e)}
+
+
+def classify_command(text: str) -> Optional[str]:
+    """Classify recognized text into AAC command category."""
     if not text:
         return None
     
@@ -418,15 +458,7 @@ def classify_command(text: str) -> Optional[str]:
 
 
 def extract_word_timing(vosk_result: Dict) -> List[Dict[str, Any]]:
-    """
-    Extract word-level timing information from Vosk result.
-    
-    Args:
-        vosk_result: Full Vosk recognition result
-        
-    Returns:
-        List of word timing dictionaries
-    """
+    """Extract word-level timing information from Vosk result."""
     words = []
     if 'result' in vosk_result and vosk_result['result']:
         for word_info in vosk_result['result']:
@@ -443,7 +475,9 @@ def recognize_with_fallback(
     recognizer: sr.Recognizer, 
     audio: sr.AudioData, 
     metadata: Dict[str, Any],
-    command_mode: bool = False
+    command_mode: bool = False,
+    use_parallel: bool = True,
+    parallel_timeout: float = 5.0
 ) -> Dict[str, Any]:
     """
     Try multiple recognition services with fallback.
@@ -453,72 +487,127 @@ def recognize_with_fallback(
         audio: AudioData to recognize
         metadata: Audio metadata to include in response
         command_mode: If True, optimize for AAC commands
-        
-    Returns:
-        Recognition result dictionary with standardized camelCase keys
+        use_parallel: If True, try services in parallel (faster for non-command mode)
+        parallel_timeout: Timeout for parallel recognition in seconds
     """
     errors = []
     start_time = time.time()
 
-    # Try Google Speech Recognition first (usually more accurate for free-form speech)
-    if not command_mode:
-        try:
-            log_debug("Trying Google Speech Recognition...")
-            text = recognizer.recognize_google(audio, show_all=False)
+    # OPTIMIZATION: In command mode, try Vosk FIRST (local + grammar-constrained)
+    if command_mode:
+        log_debug("Command mode: Trying Vosk first (local + grammar-constrained)...")
+        vosk_result = try_vosk_recognition(audio, command_mode=True)
+        
+        if vosk_result["success"]:
             processing_time = int((time.time() - start_time) * 1000)
-            log_debug(f"Google succeeded in {processing_time}ms: {text}")
+            log_debug(f"Vosk succeeded in {processing_time}ms: {vosk_result['text']}")
             
             return build_success_response(
-                text=text,
-                service="google",
-                confidence=0.85,  # Google doesn't provide confidence, estimate high
-                metadata=metadata,
-                processing_time=processing_time,
-                command_mode=command_mode
-            )
-        except sr.UnknownValueError:
-            log_debug("Google: Could not understand audio")
-            errors.append({"service": "google", "error": "Could not understand audio"})
-        except sr.RequestError as e:
-            log_debug(f"Google RequestError: {e}")
-            errors.append({"service": "google", "error": str(e)})
-        except Exception as e:
-            log_debug(f"Google unexpected error: {type(e).__name__}: {e}")
-            errors.append({"service": "google", "error": str(e)})
-    
-    # Try Vosk (offline) - preferred for command mode
-    try:
-        log_debug("Trying Vosk offline recognition...")
-        model = load_vosk_model(vosk_model_path)
-        
-        if model is None:
-            raise RuntimeError("Vosk model not available")
-        
-        text, confidence, full_result = recognize_vosk(audio, model, command_mode)
-        processing_time = int((time.time() - start_time) * 1000)
-
-        if text:
-            log_debug(f"Vosk succeeded in {processing_time}ms: {text}")
-            
-            # Extract word timing
-            word_timing = extract_word_timing(full_result)
-            
-            return build_success_response(
-                text=text,
+                text=vosk_result["text"],
                 service="vosk",
-                confidence=confidence,
+                confidence=vosk_result["confidence"],
                 metadata=metadata,
                 processing_time=processing_time,
-                command_mode=command_mode,
-                word_timing=word_timing
+                command_mode=True,
+                word_timing=vosk_result.get("wordTiming")
             )
         else:
-            log_debug("Vosk: No text recognized")
-            errors.append({"service": "vosk", "error": "Could not understand audio"})
+            errors.append({"service": "vosk", "error": vosk_result.get("error", "Unknown error")})
             
-    except Exception as e:
-        log_debug(f"Vosk error: {type(e).__name__}: {e}")
-        errors.append({"service": "vosk", "error": str(e)})
+        # Fallback to Google for command mode
+        log_debug("Vosk failed in command mode, falling back to Google...")
+        google_result = try_google_recognition(recognizer, audio)
+        
+        if google_result["success"]:
+            processing_time = int((time.time() - start_time) * 1000)
+            return build_success_response(
+                text=google_result["text"],
+                service="google",
+                confidence=google_result["confidence"],
+                metadata=metadata,
+                processing_time=processing_time,
+                command_mode=True
+            )
+        else:
+            errors.append({"service": "google", "error": google_result.get("error", "Unknown error")})
+    
+    # Non-command mode: use parallel recognition for speed
+    elif use_parallel:
+        log_debug("Non-command mode: Trying parallel recognition...")
+        
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = {
+                executor.submit(try_google_recognition, recognizer, audio): "google",
+                executor.submit(try_vosk_recognition, audio, False): "vosk"
+            }
+            
+            try:
+                for future in as_completed(futures, timeout=parallel_timeout):
+                    service = futures[future]
+                    try:
+                        result = future.result()
+                        if result["success"]:
+                            processing_time = int((time.time() - start_time) * 1000)
+                            log_debug(f"{service} succeeded first in {processing_time}ms: {result['text']}")
+                            
+                            # Cancel remaining futures
+                            for f in futures:
+                                f.cancel()
+                            
+                            return build_success_response(
+                                text=result["text"],
+                                service=service,
+                                confidence=result["confidence"],
+                                metadata=metadata,
+                                processing_time=processing_time,
+                                command_mode=False,
+                                word_timing=result.get("wordTiming")
+                            )
+                        else:
+                            errors.append({"service": service, "error": result.get("error", "Unknown error")})
+                    except Exception as e:
+                        errors.append({"service": service, "error": str(e)})
+                        
+            except FuturesTimeoutError:
+                log_debug(f"Parallel recognition timed out after {parallel_timeout}s")
+                errors.append({"service": "parallel", "error": f"Timeout after {parallel_timeout}s"})
+    
+    # Sequential fallback (non-command mode without parallel)
+    else:
+        # Try Google first
+        log_debug("Trying Google Speech Recognition...")
+        google_result = try_google_recognition(recognizer, audio)
+        
+        if google_result["success"]:
+            processing_time = int((time.time() - start_time) * 1000)
+            return build_success_response(
+                text=google_result["text"],
+                service="google",
+                confidence=google_result["confidence"],
+                metadata=metadata,
+                processing_time=processing_time,
+                command_mode=False
+            )
+        else:
+            errors.append({"service": "google", "error": google_result.get("error", "Unknown error")})
+        
+        # Try Vosk
+        log_debug("Trying Vosk offline recognition...")
+        vosk_result = try_vosk_recognition(audio, command_mode=False)
+        
+        if vosk_result["success"]:
+            processing_time = int((time.time() - start_time) * 1000)
+            return build_success_response(
+                text=vosk_result["text"],
+                service="vosk",
+                confidence=vosk_result["confidence"],
+                metadata=metadata,
+                processing_time=processing_time,
+                command_mode=False,
+                word_timing=vosk_result.get("wordTiming")
+            )
+        else:
+            errors.append({"service": "vosk", "error": vosk_result.get("error", "Unknown error")})
     
     # All services failed
     processing_time = int((time.time() - start_time) * 1000)
@@ -546,22 +635,7 @@ def build_success_response(
     command_mode: bool = False,
     word_timing: Optional[List[Dict]] = None
 ) -> Dict[str, Any]:
-    """
-    Build standardized success response with camelCase keys.
-    
-    Args:
-        text: Recognized text
-        service: Recognition service used
-        confidence: Recognition confidence (0-1)
-        metadata: Audio metadata
-        processing_time: Processing time in milliseconds
-        command_mode: Whether command mode was used
-        word_timing: Optional word-level timing information
-        
-    Returns:
-        Standardized response dictionary
-    """
-    # Classify command type
+    """Build standardized success response with camelCase keys."""
     command_type = classify_command(text) if command_mode else None
     
     response = {
@@ -571,7 +645,6 @@ def build_success_response(
         "service": service,
         "processingTimeMs": processing_time,
         
-        # Audio metadata (camelCase)
         "audio": {
             "duration": metadata.get('duration'),
             "sampleRate": metadata.get('sampleRate') or metadata.get('sample_rate'),
@@ -579,7 +652,6 @@ def build_success_response(
             "channels": metadata.get('channels', 1)
         },
         
-        # AAC-specific fields
         "aac": {
             "commandMode": command_mode,
             "commandType": command_type,
@@ -587,11 +659,9 @@ def build_success_response(
         }
     }
     
-    # Add word timing if available
     if word_timing:
         response["wordTiming"] = word_timing
     
-    # Add suggested actions for commands
     if command_type and command_type != "freeform":
         response["aac"]["suggestedActions"] = get_suggested_actions(text, command_type)
     
@@ -606,20 +676,7 @@ def build_error_response(
     error_details: Optional[List[Dict]] = None,
     warnings: Optional[List[str]] = None
 ) -> Dict[str, Any]:
-    """
-    Build standardized error response with camelCase keys.
-    
-    Args:
-        error_code: Error code string
-        error_message: Human-readable error message
-        metadata: Audio metadata
-        processing_time: Processing time in milliseconds
-        error_details: Optional list of service-specific errors
-        warnings: Optional list of warning messages
-        
-    Returns:
-        Standardized error response dictionary
-    """
+    """Build standardized error response with camelCase keys."""
     response = {
         "success": False,
         "transcription": None,
@@ -648,16 +705,7 @@ def build_error_response(
 
 
 def get_suggested_actions(text: str, command_type: str) -> List[str]:
-    """
-    Get suggested follow-up actions based on recognized command.
-    
-    Args:
-        text: Recognized text
-        command_type: Classified command type
-        
-    Returns:
-        List of suggested action strings
-    """
+    """Get suggested follow-up actions based on recognized command."""
     suggestions = {
         "navigation": ["confirm_navigation", "show_menu", "go_back"],
         "selection": ["confirm_selection", "cancel", "show_options"],
@@ -674,33 +722,37 @@ def get_suggested_actions(text: str, command_type: str) -> List[str]:
 def process_audio(
     audio_bytes: bytes,
     command_mode: bool = False,
-    skip_preprocessing: bool = False
+    skip_preprocessing: bool = False,
+    skip_validation: bool = False,
+    trusted_format: Optional[str] = None,
+    use_parallel: bool = True,
+    use_simple_filter: bool = False,
+    use_cached_threshold: bool = True
 ) -> Dict[str, Any]:
     """
     Process audio bytes and return recognition result.
     
-    This is the main entry point for audio processing, suitable for
-    direct calls or integration with web servers.
-    
     Args:
         audio_bytes: Raw audio bytes
         command_mode: If True, optimize for AAC command recognition
-        skip_preprocessing: If True, skip audio preprocessing
-        
-    Returns:
-        Recognition result dictionary
+        skip_preprocessing: If True, skip audio preprocessing entirely
+        skip_validation: If True, skip audio quality validation (for trusted sources)
+        trusted_format: If provided, skip format detection
+        use_parallel: If True, use parallel recognition in non-command mode
+        use_simple_filter: If True, use faster single-pole filter
+        use_cached_threshold: If True, use cached energy threshold
     """
     start_time = time.time()
     
     recognizer = sr.Recognizer()
     
-    # Configure recognizer for AAC context (optimized for quick responses)
+    # Configure recognizer for AAC context
     recognizer.energy_threshold = 300
     recognizer.dynamic_energy_threshold = True
-    recognizer.pause_threshold = 0.4  # Shorter for faster response
+    recognizer.pause_threshold = 0.4
     recognizer.phrase_threshold = 0.2
     recognizer.non_speaking_duration = 0.2
-    recognizer.operation_timeout = 10  # Reduced timeout for AAC responsiveness
+    recognizer.operation_timeout = 10
 
     if len(audio_bytes) == 0:
         return build_error_response(
@@ -710,12 +762,16 @@ def process_audio(
             processing_time=0
         )
 
-    # Detect format
-    audio_format = detect_audio_format(audio_bytes)
-    log_debug(f"Detected audio format: {audio_format}")
+    # Detect or use trusted format
+    if trusted_format:
+        audio_format = trusted_format
+        log_debug(f"Using trusted audio format: {audio_format}")
+    else:
+        audio_format = detect_audio_format(audio_bytes)
+        log_debug(f"Detected audio format: {audio_format}")
 
     # Get audio metadata
-    metadata = {}
+    metadata = {'format': audio_format}
     audio_file = io.BytesIO(audio_bytes)
 
     if audio_format == 'WAV':
@@ -724,16 +780,19 @@ def process_audio(
         log_debug(f"Audio metadata: {metadata}")
     
     try:
-        # Load audio for recognition
         with sr.AudioFile(audio_file) as source:
-            # Quick ambient noise calibration
+            # Ambient noise calibration (uses cache when available)
             if metadata.get('duration', 0) > 0.3:
-                adjust_ambient_noise(recognizer, source, duration=0.2)
+                adjust_ambient_noise(
+                    recognizer, 
+                    source, 
+                    duration=0.2,
+                    use_cached=use_cached_threshold
+                )
 
-            # Record audio
             audio = recognizer.record(source)
 
-            # Update metadata if not set
+            # Update metadata
             if 'sampleRate' not in metadata:
                 metadata['sampleRate'] = source.SAMPLE_RATE
             if 'sampleWidth' not in metadata:
@@ -744,33 +803,57 @@ def process_audio(
                     3
                 )
             
-            # Validate audio quality
-            validation = validate_audio_quality(
-                audio, 
-                metadata['sampleRate'], 
-                metadata['duration']
-            )
-
-            if not validation['valid']:
-                processing_time = int((time.time() - start_time) * 1000)
-                return build_error_response(
-                    error_code="AUDIO_QUALITY_ISSUES",
-                    error_message="; ".join(validation['issues']),
-                    metadata=metadata,
-                    processing_time=processing_time,
-                    warnings=validation['warnings']
+            # Validate audio quality (skip for trusted sources)
+            if not skip_validation:
+                # Use non-strict validation in command mode for speed
+                validation = validate_audio_quality(
+                    audio, 
+                    metadata['sampleRate'], 
+                    metadata['duration'],
+                    strict=not command_mode
                 )
+
+                if not validation['valid']:
+                    processing_time = int((time.time() - start_time) * 1000)
+                    return build_error_response(
+                        error_code="AUDIO_QUALITY_ISSUES",
+                        error_message="; ".join(validation['issues']),
+                        metadata=metadata,
+                        processing_time=processing_time,
+                        warnings=validation['warnings']
+                    )
+                
+                warnings = validation['warnings']
+            else:
+                warnings = []
+                log_debug("Skipping audio validation (trusted source)")
             
-            # Preprocess audio (unless skipped)
-            if not skip_preprocessing:
-                audio = preprocess_audio(recognizer, audio)
+            # Preprocess audio
+            # Skip preprocessing in command mode for speed, or when explicitly requested
+            should_preprocess = not skip_preprocessing and not command_mode
+            
+            if should_preprocess:
+                audio = preprocess_audio(
+                    recognizer, 
+                    audio, 
+                    apply_filter=True,
+                    use_simple_filter=use_simple_filter
+                )
+            elif command_mode:
+                log_debug("Skipping preprocessing in command mode for speed")
 
             # Recognize with fallback
-            result = recognize_with_fallback(recognizer, audio, metadata, command_mode)
+            result = recognize_with_fallback(
+                recognizer, 
+                audio, 
+                metadata, 
+                command_mode,
+                use_parallel=use_parallel and not command_mode
+            )
 
             # Add validation warnings if any
-            if validation['warnings']:
-                result['warnings'] = validation['warnings']
+            if warnings:
+                result['warnings'] = result.get('warnings', []) + warnings
             
             return result
             
@@ -788,27 +871,32 @@ def process_audio(
 def main():
     """Main entry point when run from command line."""
     
-    # Check for command-line flags
+    # Parse command-line flags
     command_mode = '--command-mode' in sys.argv or os.environ.get('AAC_COMMAND_MODE') == 'true'
     skip_preprocessing = '--skip-preprocessing' in sys.argv
+    skip_validation = '--skip-validation' in sys.argv
+    no_parallel = '--no-parallel' in sys.argv
+    simple_filter = '--simple-filter' in sys.argv
+    no_cache = '--no-cache' in sys.argv
     
-    # Preload Vosk model if available (reduces first-request latency)
+    # Preload Vosk model
     if os.environ.get('PRELOAD_VOSK', 'true').lower() == 'true':
         log_debug("Preloading Vosk model...")
         warm_up_models()
 
     try:
-        # Read audio from stdin
         audio_bytes = sys.stdin.buffer.read()
         
-        # Process audio
         result = process_audio(
             audio_bytes, 
             command_mode=command_mode,
-            skip_preprocessing=skip_preprocessing
+            skip_preprocessing=skip_preprocessing,
+            skip_validation=skip_validation,
+            use_parallel=not no_parallel,
+            use_simple_filter=simple_filter,
+            use_cached_threshold=not no_cache
         )
         
-        # Output result
         print(json.dumps(result))
         sys.exit(0 if result['success'] else 1)
         
